@@ -6,6 +6,7 @@ export const DEFAULT_SETTINGS = Object.freeze({
   volume: 0.85,
   repeatMode: 'off',
   shuffle: false,
+  syncHistory: true,
 });
 
 import { isSafeResourceUrl } from '../safe-media-url.mjs';
@@ -28,6 +29,7 @@ export function sanitizeSettings(input, fallback = DEFAULT_SETTINGS) {
   if (QUALITIES.has(raw.quality)) next.quality = /** @type {'standard' | 'lossless'} */ (raw.quality);
   if (REPEAT_MODES.has(raw.repeatMode)) next.repeatMode = /** @type {'off' | 'all' | 'one'} */ (raw.repeatMode);
   if (typeof raw.shuffle === 'boolean') next.shuffle = raw.shuffle;
+  if (typeof raw.syncHistory === 'boolean') next.syncHistory = raw.syncHistory;
   if (typeof raw.volume === 'number' && Number.isFinite(raw.volume)) {
     next.volume = Math.min(1, Math.max(0, raw.volume));
   }

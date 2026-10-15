@@ -266,11 +266,37 @@ export async function setFavorite(session: Session, trackId: string, favorite: b
   await clientFor(session).setFavorite(trackId, favorite);
 }
 
-export async function createPlaylist(session: Session, name: string, trackIds: string[]): Promise<string | undefined> {
-  const now = new Date();
-  const createTime = `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`
+// Same 14-digit UTC form the project already verified on playlist create; the H5 recent-play shape
+// uses the same createTime field family. Real-account acceptance of the write is still pending.
+export function utcTimestamp14(now = new Date()): string {
+  return `${now.getUTCFullYear()}${String(now.getUTCMonth() + 1).padStart(2, '0')}${String(now.getUTCDate()).padStart(2, '0')}`
     + `${String(now.getUTCHours()).padStart(2, '0')}${String(now.getUTCMinutes()).padStart(2, '0')}${String(now.getUTCSeconds()).padStart(2, '0')}`;
-  const response = await clientFor(session).createPlaylist({ name, songCodes: trackIds, createTime });
+}
+
+// Reports what was actually heard. `listenedSeconds` comes from the renderer's real playback
+// position, so a skipped track is never recorded as a full listen.
+export async function createRecentPlay(
+  session: Session,
+  entry: { trackId: string; title: string; listenedSeconds: number; songDurationSeconds?: number },
+): Promise<void> {
+  const duration = Math.max(0, Math.floor(entry.listenedSeconds));
+  const songDuration = Number.isFinite(entry.songDurationSeconds) && (entry.songDurationSeconds ?? 0) > 0
+    ? Math.ceil(entry.songDurationSeconds as number) : undefined;
+  await clientFor(session).createRecentPlay([{
+    songCode: entry.trackId,
+    contentCode: entry.trackId,
+    contentType: '1',
+    songName: entry.title,
+    listenType: '1',
+    duration,
+    createTime: utcTimestamp14(),
+    playCount: 1,
+    ...(songDuration === undefined ? {} : { songDuration }),
+  }]);
+}
+
+export async function createPlaylist(session: Session, name: string, trackIds: string[]): Promise<string | undefined> {
+  const response = await clientFor(session).createPlaylist({ name, songCodes: trackIds, createTime: utcTimestamp14() });
   return id(response?.playListID) ?? id(response?.playlistID);
 }
 

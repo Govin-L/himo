@@ -38,6 +38,29 @@ export function orderWithActiveFirst(count, activeIndex, random = Math.random) {
   return order;
 }
 
+// Shuffle mode: 上一首 follows what was actually played, not the shuffled index order.
+export function pushPlayHistory(history, cursor, limit = 200) {
+  if (!Number.isInteger(cursor) || cursor < 0) return history;
+  const next = [...history, cursor];
+  return next.length > limit ? next.slice(next.length - limit) : next;
+}
+
+export function popPlayHistory(history) {
+  if (!history.length) return { cursor: null, history };
+  return { cursor: history[history.length - 1], history: history.slice(0, -1) };
+}
+
+// Report a listen only after a real, meaningful portion was heard, and never claim more seconds
+// than were actually played. Short tracks (including synthetic fixtures) report proportionally earlier.
+export function historyReportDecision({ listenedSeconds, durationSeconds, alreadyReported, minSeconds = 30, ratio = 0.5 }) {
+  if (alreadyReported) return { report: false, seconds: 0 };
+  const listened = Math.max(0, Math.floor(Number.isFinite(listenedSeconds) ? listenedSeconds : 0));
+  const duration = Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : null;
+  const threshold = duration === null ? minSeconds : Math.min(minSeconds, Math.max(1, Math.ceil(duration * ratio)));
+  if (listened < threshold) return { report: false, seconds: listened };
+  return { report: true, seconds: duration === null ? listened : Math.min(listened, Math.ceil(duration)) };
+}
+
 // Queue autosave must not be a pure debounce: `timeupdate` keeps firing while a track plays, so a
 // debounce never settles and the queue would never reach disk during continuous playback. Wait for
 // the edits to settle, but never let more than `intervalMs` pass between two writes.

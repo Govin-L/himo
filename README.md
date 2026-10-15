@@ -41,6 +41,9 @@ npm start
 | 收藏总数 | 接口没有已确认的直接总数字段，主进程后台分页到末页后按 ID 去重；总数与“已加载 N 首”分开，失败不显示假总数；计数/显示共用页索引，不重复请求 |
 | 播放全部 | 先补齐分页，准备中可取消；不再把当前一页叫“全部”；965 首合成库队列与磁盘保存完整验证通过 |
 | 歌单/搜索/专辑/歌手/历史 | 主进程 + 白名单 IPC + 页面；歌单/专辑分页；本机历史与华为只读历史分开；正式业务集成使用合成 HTTP 响应通过 |
+| 歌单缓存 | 进程内 5 分钟缓存：重复进入歌单页不再重复请求，只有“刷新”回源；创建/改名/简介/删除与切换账号会失效缓存；离线时有标记的磁盘缓存仍可用 |
+| 播放模式 | 设置里可选顺序播放/列表循环/单曲循环/**随机播放**（工具栏随机按钮同源）；随机模式的“上一首”按实际播放顺序回退，而不是打乱后的下标顺序 |
+| 播放历史上报 | 按公开 H5 的 `recentlyplayed/create` 形态上报：真实收听达到阈值后只报一次，秒数为实际收听而非整曲时长；失败静默、不重试、不影响播放，可在设置关闭。**尚未用真实账号验证服务端结果** |
 | 播放器 | 单 Audio、暂停/上下曲/seek/音量/队列/随机/循环/音质选择/行级歌词/MediaSession；本地 MP3/FLAC 与切页不中断通过，不等于真实 CDN/听播验收 |
 | 账号写操作 | 收藏、带歌曲建歌单、简介修改、删自建歌单；主进程归属核验/串行/幂等/写后读回/创建未决意图；本轮只有合成集成测试，真实桌面写验收需另行授权 |
 | 离线只读缓存 | 收藏与歌单网络失败可显示 5MB 上限缓存，并标“离线缓存，可能不是最新”；400 不清会话 |
@@ -53,7 +56,7 @@ npm start
 ## 测试
 
 ```sh
-npm test                         # 134 项离线协议/业务/状态测试
+npm test                         # 140 项离线协议/业务/状态测试
 npm run typecheck
 npm run build
 npm run test:electron             # 真实 Electron 边界、本地音频/seek/ended、代理路由
@@ -89,9 +92,24 @@ node scripts/release-checksums.mjs release/linux-x64
 普通 Linux 桌面直接执行 AppImage。`test:packaged` 从真正 AppImage 提取二进制后启动隔离 profile，核对 archive 与当前 out 一致、无私人路径、renderer 边界与设置写入。它不是本人账号/真实音频验收。
 
 - `.deb` 需要真实主页和 `Name <email>` 维护者；有真实发布身份时通过 `DESKTOP_BUILD_HOMEPAGE`、`DESKTOP_BUILD_MAINTAINER` 传入。缺失就只产出 AppImage，不编造地址。
-- Windows NSIS、macOS 分架构 DMG 入口保留为原生 OS 上的 `dist:win`、`dist:mac:x64`、`dist:mac:arm64`。**不需要 Windows 才能验证共享 API/播放器逻辑**，当前不做 Wine 交叉构建、不宣称 Windows/macOS 已验收。
+- Windows NSIS 安装包、macOS 分架构 DMG 入口保留为原生 OS 上的 `dist:win`、`dist:mac:x64`、`dist:mac:arm64`。Windows 单文件便携版可在 Linux 不借助 Wine 交叉打包，见下节。**不需要 Windows 才能验证共享 API/播放器逻辑**，交叉打包也不等于 Windows/macOS 已验收。
 - 所有构建 `publish: never`，不自动上传。无真实签名身份的产物仅为内部测试；不能声称官方客户端或公开分发已获授权。
 - `release/`、`dist/` 可能有历史包/失败的 NSIS 中间文件；只以本次成功命令及当前 Linux 目录为准，不把旧包当现役交付。
+
+## Windows 单文件便携版（内部测试、未签名）
+
+```sh
+npm run dist:win:portable
+npm run test:windows-portable -- release/win-x64-portable/huawei-music-desktop-0.0.1-win-x64-portable-internal.exe
+node scripts/release-checksums.mjs release/win-x64-portable
+```
+
+- 只需一个 EXE，在 Windows x64 双击运行；不要求预装 Node.js，不弹安装向导、不生成卸载器、不注册系统协议。构建使用 electron-builder 的 portable 目标，**不调用 Wine**。
+- 每次启动都会把程序解压至临时目录，正常退出后清理，因此启动比已解压目录版多一次解压成本。实际速度受磁盘、杀毒扫描等影响，尚无 Windows 测量，不承诺秒数。
+- 设置、队列、本机历史与加密音乐会话仍保存在 Electron 的 `userData`（Windows 通常在 `%APPDATA%` 下），不在临时解压目录；正常重启或替换同一应用身份的新 EXE 不应因解压重置数据。`npm run test:portable-data` 已在 Linux 实际打包 Electron 中验证：删除第一份程序，换目录重新解压启动，userData 不变，设置、队列与 Chromium 本机存储均可恢复；这不是 Windows 凭据验收。退出账号会主动清个人数据。安全存储不可用/会话失效时仍须重新登录。
+- “免安装”不等于“数据跟随 EXE”：复制 EXE 到另一台电脑不会带上原电脑的设置/登录，加密凭据也不能保证跨电脑或 Windows 用户解密。不把账号数据迁入 EXE 同目录来冒充全便携。
+- 当前产物约 95 MiB，已在 Linux 静态拆包确认内嵌应用为 x64、内容与当前 `out/` 一致、无私人资料且无签名；外层 NSIS 启动器为 x86，不改变内嵌程序的 x64 要求。**尚未在 Windows 启动、听播或验证凭据恢复**。
+- 未签名程序可能被 SmartScreen 或企业安全策略拦截；不要求关闭防护或绕过组织策略。仅供已知来源的内部测试，不自动上传或公开分发。
 
 ## 已知边界
 
@@ -100,6 +118,7 @@ node scripts/release-checksums.mjs release/linux-x64
 - MP3/FLAC 协议研究样本曾完整 FFmpeg 解码，但不能替代 Electron 真实 CDN 的 metadata/seek/ended 与设备听播。
 - 每日推荐不做。歌单只提供已验证的简介修改，不提供改名/封面/曲目编辑的空按钮。
 - 不做下载/解密/特殊音质/Hi-Res 承诺/自动更新。
+- 播放历史上报的接口形态来自公开 H5 资源，尚未用真实账号验证；若服务端拒绝，只会静默失败，不重试、不改变播放行为。
 - 当前 OAuth client_id 来自公开兼容性研究，不是本项目自有注册身份；公开分发前仍需身份、授权和条款评估。
 
 主进程 HTTP 与 Chromium 登录/音频遵循进程级 HTTP(S) 代理配置，不改系统代理。暂不支持 SOCKS/PAC/代理认证；错误配置明确拒绝而非静默直连。NO_PROXY 中 CIDR 仅主进程支持，Chromium 侧保留可表达的域名/IP 例外。

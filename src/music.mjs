@@ -101,6 +101,20 @@ export class MusicClient {
       {playListID:asId(id,'歌单 ID')},
       {authenticated:true,retry:false,stage:'删除歌单'});
   }
+  // Observed H5 shape: one wrapper object with a createRecentPlayInfos array. The H5 client sends
+  // its own playback position and the client must never invent a larger duration than really heard.
+  createRecentPlay(infos) {
+    const list = Array.isArray(infos) ? infos : [];
+    if (!list.length || list.length > 20) throw new Error('播放历史上报需要 1-20 条记录');
+    for (const entry of list) {
+      if (typeof entry?.contentCode !== 'string' || !entry.contentCode.trim()) throw new Error('播放历史上报缺少歌曲 ID');
+      if (typeof entry?.contentType !== 'string' || !entry.contentType) throw new Error('播放历史上报缺少内容类型');
+      if (!Number.isFinite(entry?.duration) || entry.duration < 0 || entry.duration > 24 * 3600) throw new Error('播放时长无效');
+      if (typeof entry?.createTime !== 'string' || !/^\d{14}$/.test(entry.createTime)) throw new Error('上报时间需要 UTC yyyyMMddHHmmss');
+    }
+    return this.#request('/music-userbehavior-service/v1/service/recentlyplayed/create',
+      { createRecentPlayInfos: list }, { authenticated: true, retry: false, stage: '播放历史上报' });
+  }
   resolvePlayback(trackId, quality='standard') {
     if (typeof trackId !== 'string' || !trackId.trim()) throw new Error('播放需要真实歌曲 ID');
     const qualityType = quality === 'lossless' ? '3' : quality === 'standard' ? '1' : null;

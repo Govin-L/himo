@@ -74,6 +74,30 @@ test('write operations never retry after a network failure',async()=>{
  await assert.rejects(client.createPlaylist({name:'临时',songCodes:['song'],createTime:'20260101000000'}),/创建歌单网络失败/);
  assert.equal(calls,3);
 });
+test('recent play reporting uses the observed H5 shape and never retries',async()=>{
+ let sent;let calls=0;
+ const client=new MusicClient({session:{token:'SESSION'},fetchImpl:async(url,options)=>{calls++;sent={url,...options};return success();}});
+ await client.createRecentPlay([{songCode:'s1',contentCode:'s1',contentType:'1',songName:'Synthetic',listenType:'1',duration:42,createTime:'20260101000000',playCount:1,songDuration:60}]);
+ assert.equal(sent.url.pathname,'/music-userbehavior-service/v1/service/recentlyplayed/create');
+ assert.match(sent.headers.Authorization,/token=SESSION$/);
+ assert.deepEqual(JSON.parse(sent.body),{createRecentPlayInfos:[{songCode:'s1',contentCode:'s1',contentType:'1',songName:'Synthetic',listenType:'1',duration:42,createTime:'20260101000000',playCount:1,songDuration:60}]});
+ assert.equal(calls,1);
+ let failed=0;
+ const offline=new MusicClient({session:{token:'SESSION'},fetchImpl:async()=>{failed++;throw new Error('offline');}});
+ await assert.rejects(offline.createRecentPlay([{contentCode:'s1',contentType:'1',duration:1,createTime:'20260101000000'}]),/播放历史上报网络失败/);
+ assert.equal(failed,1,'a write that may already have applied must not be retried');
+});
+
+test('recent play reporting validates its payload before any request',async()=>{
+ let calls=0;const client=new MusicClient({session:{token:'SESSION'},fetchImpl:async()=>{calls++;return success();}});
+ assert.throws(()=>client.createRecentPlay([]),/1-20/);
+ assert.throws(()=>client.createRecentPlay([{contentCode:'',contentType:'1',duration:1,createTime:'20260101000000'}]),/歌曲 ID/);
+ assert.throws(()=>client.createRecentPlay([{contentCode:'s',contentType:'',duration:1,createTime:'20260101000000'}]),/内容类型/);
+ assert.throws(()=>client.createRecentPlay([{contentCode:'s',contentType:'1',duration:-1,createTime:'20260101000000'}]),/播放时长/);
+ assert.throws(()=>client.createRecentPlay([{contentCode:'s',contentType:'1',duration:1,createTime:'2026-01-01'}]),/上报时间/);
+ assert.equal(calls,0);
+});
+
 test('write operations validate input before any request is issued',async()=>{
  let calls=0;const client=new MusicClient({session:{token:'SESSION'},fetchImpl:async()=>{calls++;return success();}});
  assert.throws(()=>client.createPlaylist({name:'  ',songCodes:['song'],createTime:'20260101000000'}),/歌单名称/);

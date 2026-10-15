@@ -22,7 +22,8 @@ try {
     setGlobalDispatcher(mock);
     globalThis.__businessMock = mock;
     globalThis.__business = { favorite: true, description: 'Original', created: false, removed: false,
-      creates: 0, mutations: 0, favoritesRead: 0, offline: false, badHttp: false, bulk: false, bulkStarts: [] };
+      creates: 0, mutations: 0, favoritesRead: 0, libraryReads: 0, historyReports: [], historyFail: false,
+      offline: false, badHttp: false, bulk: false, bulkStarts: [] };
     const state = globalThis.__business;
     const success = value => JSON.stringify({ result: { resultCode: '000000' }, ...value });
     const song = { contentID: 'synthetic-song', contentName: 'Synthetic Song', contentType: '1', duration: '60', artistName: 'Fixture', artistID: ['artist'], albumID: 'album', albumName: 'Album' };
@@ -39,6 +40,8 @@ try {
       let data = {};
       if (path.pathname.endsWith('/favorite/simple/all')) {
         state.favoritesRead++;
+        // Playlist discovery is the multi-type read; the playlist cache must collapse repeats of it.
+        if (Array.isArray(body.contentTypes) && body.contentTypes.length > 1) state.libraryReads++;
         if (body.targetSnsUserID !== 'SYNTHETIC-SELF') throw new Error('Wrong account boundary');
         if (state.offline) throw new Error('Synthetic network failure');
         if (state.badHttp) return { statusCode: 400, data: '' };
@@ -46,6 +49,9 @@ try {
           state.bulkStarts.push(body.start);
           data = { favoriteInfos: Array.from({ length: Math.max(0, Math.min(body.limit, 965 - body.start)) }, (_, index) => ({ ...song, contentID: `bulk-${body.start + index}`, contentName: `合成收藏 ${body.start + index}` })) };
         } else data = { favoriteInfos: body.contentTypes.length === 1 ? [song] : [song, owned(), ...(state.created && !state.removed ? [created()] : [])] };
+      } else if (path.pathname.endsWith('/recentlyplayed/create')) {
+        if (state.historyFail) return { statusCode: 500, data: '' };
+        state.historyReports.push(body);
       } else if (path.pathname.endsWith('/favorite/simple/exist')) data = { exist: state.favorite ? '1' : '0' };
       else if (path.pathname.endsWith('/favorite/create')) { state.favorite = true; state.mutations++; }
       else if (path.pathname.endsWith('/favorite/delete')) { state.favorite = false; state.mutations++; }
@@ -109,6 +115,34 @@ try {
   assert.deepEqual(results, { authenticated: true, noCredentialDto: true, reads: true, denied: true, favorite: true, writes: true });
   const writes = await app.evaluate(() => ({ creates: globalThis.__business.creates, mutations: globalThis.__business.mutations }));
   assert.deepEqual(writes, { creates: 1, mutations: 4 }, 'idempotent favorite or rejected ids issued an extra write');
+  // Playlists are cached in-process: repeats must not re-request, only an explicit refresh may.
+  await page.evaluate(() => window.desktop.music.playlists());
+  const readsAfterFirst = await app.evaluate(() => globalThis.__business.libraryReads);
+  await page.evaluate(() => window.desktop.music.playlists());
+  assert.equal(await app.evaluate(() => globalThis.__business.libraryReads), readsAfterFirst, 'a cached playlist read requested again');
+  await page.evaluate(() => window.desktop.music.playlists({ refresh: true }));
+  assert.equal(await app.evaluate(() => globalThis.__business.libraryReads), readsAfterFirst + 1, 'explicit refresh must bypass the cache');
+
+  // History sync reports real seconds through the production path and stays silent when it fails.
+  const reported = await page.evaluate(() => window.desktop.music.reportPlayback({ trackId: 'synthetic-song', title: 'Synthetic Song', listenedSeconds: 30, songDurationSeconds: 60 }));
+  assert.equal(reported.ok, true);
+  const reports = await app.evaluate(() => globalThis.__business.historyReports.slice());
+  assert.equal(reports.length, 1, JSON.stringify(reports));
+  assert.match(reports[0].createRecentPlayInfos[0].createTime, /^\d{14}$/, 'createTime must use the documented 14-digit form');
+  assert.deepEqual({ ...reports[0].createRecentPlayInfos[0], createTime: 'normalized' }, {
+    songCode: 'synthetic-song', contentCode: 'synthetic-song', contentType: '1', songName: 'Synthetic Song',
+    listenType: '1', duration: 30, createTime: 'normalized', playCount: 1, songDuration: 60,
+  });
+  const invalidReport = await page.evaluate(() => window.desktop.music.reportPlayback({ trackId: '', title: 'x', listenedSeconds: 5 }).then(() => 'resolved', () => 'rejected'));
+  assert.equal(invalidReport, 'rejected', 'an invalid history payload must be rejected before any request');
+  await app.evaluate(() => { globalThis.__business.historyFail = true; });
+  const failedReport = await page.evaluate(async () => {
+    const result = await window.desktop.music.reportPlayback({ trackId: 'synthetic-song', title: 'Synthetic Song', listenedSeconds: 30 });
+    return { ok: result.ok, loggedIn: (await window.desktop.auth.status()).data.authenticated };
+  });
+  assert.deepEqual(failedReport, { ok: false, loggedIn: true }, 'a failed history report must stay silent and keep the session');
+  await app.evaluate(() => { globalThis.__business.historyFail = false; });
+
   await app.evaluate(() => { globalThis.__business.bulk = true; });
   const indexed = await page.evaluate(async () => {
     const first = await window.desktop.music.favorites({ refresh: true });

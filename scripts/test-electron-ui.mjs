@@ -54,13 +54,15 @@ async function installHandlers(instance, urls) {
     globalThis.__searchQueries = [];
     globalThis.__descriptionWrites = [];
     globalThis.__deletedPlaylists = [];
+    globalThis.__historyReports = [];
     const channels = ['auth:status', 'music:favorites', 'music:favorites-summary', 'music:resolve-playback', 'music:lyrics', 'music:set-favorite',
-      'music:playlists', 'music:playlist-detail', 'music:search', 'music:history', 'music:album', 'music:artist', 'music:favorite-state',
+      'music:playlists', 'music:playlist-detail', 'music:search', 'music:history', 'music:album', 'music:artist', 'music:favorite-state', 'music:report-playback',
       'music:create-playlist', 'music:update-playlist-description', 'music:delete-playlist'];
     for (const channel of channels) ipcMain.removeHandler(channel);
     ipcMain.handle('auth:status', () => ok({ authenticated: true, persistence: 'memory-only' }));
     ipcMain.handle('music:favorites', () => ok({ tracks, nextStart: 50, hasMore: false, total: tracks.length }));
     ipcMain.handle('music:favorites-summary', () => ok({ total: tracks.length }));
+    ipcMain.handle('music:report-playback', (_event, input) => { globalThis.__historyReports.push(input); return ok(undefined); });
     ipcMain.handle('music:resolve-playback', (_event, input) => ok({
       url: input.trackId === 'smoke-mp3' ? mediaUrls[0] : mediaUrls[1],
       actualQuality: input.trackId === 'smoke-mp3' ? 'standard' : 'lossless',
@@ -128,7 +130,7 @@ try {
   }));
   assert.deepEqual(boundary.apiKeys, ['app', 'auth', 'music', 'onNotice', 'player', 'queue', 'settings', 'window']);
   assert.deepEqual(boundary.musicKeys, ['album', 'artist', 'createPlaylist', 'deletePlaylist', 'favoriteState', 'favorites', 'favoritesSummary', 'history', 'lyrics',
-    'playlistDetail', 'playlists', 'resolvePlayback', 'search', 'setFavorite', 'updatePlaylistDescription']);
+    'playlistDetail', 'playlists', 'reportPlayback', 'resolvePlayback', 'search', 'setFavorite', 'updatePlaylistDescription']);
   assert.equal(boundary.nodeProcess, 'undefined');
   assert.equal(boundary.genericInvoke, 'undefined', 'preload exposed a generic IPC entry point');
 
@@ -197,6 +199,21 @@ try {
   await page.getByRole('button', { name: '取消收藏 Smoke MP3' }).click();
   await page.waitForFunction(() => document.querySelector('.notice')?.textContent.includes('已取消收藏'));
   const writes = await app.evaluate(() => { const rows = globalThis.__favoriteWrites; return rows.splice(0, rows.length); });
+  // Real playback reaches the history-sync IPC with the seconds actually heard, never more.
+  // The reports live in the main process, so poll from the test process instead of the page.
+  let historyReports = [];
+  for (let attempt = 0; attempt < 75; attempt++) {
+    historyReports = await app.evaluate(() => globalThis.__historyReports.slice());
+    if (historyReports.some(report => report.trackId === 'smoke-mp3')) break;
+    await page.waitForTimeout(200);
+  }
+  const mp3Reports = historyReports.filter(report => report.trackId === 'smoke-mp3');
+  assert.equal(mp3Reports.length, 1, `expected exactly one report per playback, got ${JSON.stringify(historyReports)}`);
+  assert.equal(mp3Reports[0].title, 'Smoke MP3');
+  assert.ok(mp3Reports[0].listenedSeconds >= 2 && mp3Reports[0].listenedSeconds <= 4, JSON.stringify(mp3Reports[0]));
+  assert.equal(mp3Reports[0].songDurationSeconds, 4);
+  assert.deepEqual(historyReports.filter(report => report.listenedSeconds > (report.songDurationSeconds ?? Infinity)), [],
+    'a history report must never claim more seconds than the track really played');
   assert.deepEqual(writes, [{ trackId: 'smoke-mp3', favorite: false }]);
 
   // Lyrics / queue panels are mutually exclusive overlays.
@@ -269,6 +286,20 @@ try {
   await page.getByRole('button', { name: '单曲循环' }).waitFor();
   await page.getByRole('combobox', { name: '默认音质' }).selectOption('standard');
   await page.getByRole('combobox', { name: '播放模式' }).selectOption('off');
+  // Random-order playback is selectable as an explicit mode, not only via the toolbar toggle.
+  await page.getByRole('combobox', { name: '播放模式' }).selectOption('shuffle');
+  await page.waitForFunction(() => document.querySelector('button[aria-label="随机播放"]')?.getAttribute('aria-pressed') === 'true');
+  await page.getByRole('combobox', { name: '播放模式' }).selectOption('off');
+  await page.waitForFunction(() => document.querySelector('button[aria-label="随机播放"]')?.getAttribute('aria-pressed') === 'false');
+  // History sync is a real setting and must round-trip through the JSON store. The checkbox is
+  // controlled by persisted state, so wait for the write instead of asserting Playwright's click.
+  const historyToggle = page.getByRole('checkbox', { name: '同步播放到华为历史' });
+  await historyToggle.click();
+  await page.waitForFunction(() => document.querySelector('input[aria-label="同步播放到华为历史"]')?.checked === false);
+  assert.equal(JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.syncHistory, false);
+  await historyToggle.click();
+  await page.waitForFunction(() => document.querySelector('input[aria-label="同步播放到华为历史"]')?.checked === true);
+  assert.equal(JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.syncHistory, true);
 
   // Actual Electron geometry: player and navigation stay in the viewport at the minimum window.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(960, 640));

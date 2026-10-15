@@ -216,7 +216,27 @@ shareFlag=0 用于本次私密测试，默认保持。不要自动公开歌单�
 
 响应 `contentSimpleInfos[]`，当前样本返回 200 条。未验证任意分页参数，不向 UI 承诺无限历史。
 
-首版不调用 recentlyplayed/create，不伪造服务端播放时长。客户端自己的最近播放单独命名为“本机记录”。
+客户端自己的最近播放单独命名为“本机记录”，与华为历史分开显示。
+
+### 3.9 播放历史上报（写入；参数取自公开 H5，尚未真实账号验证）
+
+`POST /music-userbehavior-service/v1/service/recentlyplayed/create`
+
+公开 H5 打包代码里的 `uploadRecentPlay` 构造（唯一证据来源）：
+
+```json
+{"createRecentPlayInfos":[{
+  "songCode":"<歌曲ID>","contentCode":"<同一歌曲ID>","contentType":"1",
+  "songName":"<曲名>","listenType":"1",
+  "duration":<本次实际收听秒数>,"createTime":"<UTC yyyyMMddHHmmss>",
+  "playCount":1,"songDuration":<整曲秒数>
+}]}
+```
+
+- 路径在公开 H5 资源列表中真实存在，字段名与顺序来自其压缩代码；**没有用真实账号发起过写请求**，业务码、去重规则和计数口径均未知。
+- 客户端只在真实播放达到阈值（默认 30 秒与整曲 50% 中较小者）后上报一次；`duration` 是累计实际收听秒数，不用整曲时长冒充，也不给未真正播放的曲目上报。
+- 写入 `retry:false`，不自动重试；失败静默，不影响播放，也不把会话判为失效。设置项 `syncHistory` 可关闭，默认开启。
+- 真实账号验收（播放后华为历史是否出现该曲目、是否产生重复记录）仍为 pending；不得以“代码已实现”或“接口 200”代替。
 
 ## 4. 搜索、专辑、歌手
 

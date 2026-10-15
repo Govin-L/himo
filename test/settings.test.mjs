@@ -3,12 +3,14 @@ import assert from 'node:assert/strict';
 import { DEFAULT_SETTINGS, sanitizeQueue, sanitizeSettings } from '../src/main/settings.mjs';
 
 test('settings keep only known enum values and clamp volume', () => {
-  assert.deepEqual(sanitizeSettings({ closeBehavior: 'tray', quality: 'lossless', volume: 5, repeatMode: 'one', shuffle: true }), {
-    closeBehavior: 'tray', quality: 'lossless', volume: 1, repeatMode: 'one', shuffle: true,
+  assert.deepEqual(sanitizeSettings({ closeBehavior: 'tray', quality: 'lossless', volume: 5, repeatMode: 'one', shuffle: true, syncHistory: false }), {
+    closeBehavior: 'tray', quality: 'lossless', volume: 1, repeatMode: 'one', shuffle: true, syncHistory: false,
   });
-  assert.deepEqual(sanitizeSettings({ closeBehavior: 'evil', quality: 'hires', volume: -3, repeatMode: 'loop', shuffle: 'yes' }), {
+  assert.deepEqual(sanitizeSettings({ closeBehavior: 'evil', quality: 'hires', volume: -3, repeatMode: 'loop', shuffle: 'yes', syncHistory: 'yes' }), {
     ...DEFAULT_SETTINGS, volume: 0,
   });
+  assert.equal(DEFAULT_SETTINGS.syncHistory, true, 'history sync is on by default');
+  assert.equal(sanitizeSettings({ syncHistory: false }).syncHistory, false);
   assert.deepEqual(sanitizeSettings(null), { ...DEFAULT_SETTINGS });
   assert.deepEqual(sanitizeSettings({ volume: Number.NaN }).volume, DEFAULT_SETTINGS.volume);
 });

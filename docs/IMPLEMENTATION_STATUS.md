@@ -12,9 +12,16 @@
 | M3 播放器日用能力 | in-progress | 单 Audio、顺序/随机/循环、音量/seek、音质选择、歌词高亮/手动滚动暂停跟随、队列恢复不自动播放。设置同步、媒体键旧闭包与初始化队列竞态已修。965 首队列真实磁盘读回完整且无播放 URL。真实 CDN/听播、过期资源和睡眠恢复仍未验收。 |
 | M4 受控写操作 | in-progress | 主进程串行写，收藏幂等读回；简介/删除先确认当前账号 owned，再读回核对。创建保留本次基线与未决意图，超时不重发，进程重启仍阻止盲目重复创建。生产业务集成测试使用合成响应通过。历史真实接口写验证及 added=0/removed=0 证据仍有效；**新桌面写路径没有当前授权下的真实写验收**。 |
 | M5 视觉与系统集成 | in-progress | Linux Electron 实际截图覆盖 1180×760、960×640、歌词/队列互斥、固定播放器/侧栏。中文字体测试缓存隔离修复，不修改系统。托盘/关闭/媒体键有代码，物理媒体键、无托盘桌面及睡眠恢复仍待验。四方向样机已提供，**用户尚未选择，不宣称视觉定稿**。 |
-| M6 发行工程 | in-progress | Linux x64 AppImage 已构建；从实际 AppImage 提取二进制并启动隔离 profile，核对打包文件与当前 out 一致、renderer 无 Node、设置可保存，全部通过。原生 Windows NSIS、macOS arm64/x64 DMG 入口已保留，但未在相应 OS 构建/验收。按用户要求停止 Wine 交叉构建；不把半成品 exe 当安装包。deb 等待真实主页/维护者身份，不编造。 |
+| M6 发行工程 | in-progress | Linux x64 AppImage 已构建；从实际 AppImage 提取二进制并启动隔离 profile，核对打包文件与当前 out 一致、renderer 无 Node、设置可保存，全部通过。Windows x64 单文件 portable EXE 已按后续用户要求在 Linux 交叉打包成功（99,522,256 字节，未用 Wine）；静态拆包确认内嵌 x64、无私有目录/源码、与当前 out 一致。启动速度/Windows 登录恢复/媒体仍未验收。原生 NSIS 安装包与 macOS arm64/x64 DMG 入口保留；不把历史失败的 NSIS 中间产物当安装包。deb 等待真实主页/维护者身份，不编造。 |
 
-## 本轮完成
+## 本轮完成（第二批：歌单缓存 / 随机播放 / 历史同步）
+
+- 歌单缓存：`src/main/memory-cache.mjs` + `AuthManager` 进程内 5 分钟缓存；重复读歌单/详情不再请求，显式 `refresh` 回源；写操作与切换账号失效。生产业务测试断言重复读不增加网络请求、刷新只增加一次。
+- 随机播放：设置页新增“随机播放（打乱队列顺序）”模式，与工具栏随机按钮同源；随机模式下“上一首”按实际播放顺序回退（`pushPlayHistory`/`popPlayHistory`）。
+- 播放历史上报：`recentlyplayed/create` 按公开 H5 形态实现（`src/music.mjs` + `huawei.createRecentPlay`），真实收听达阈值后只报一次，秒数为实际收听；`syncHistory` 可关；`retry:false`、失败静默。**未用真实账号发起过写请求**，服务端效果待验。
+- 测试：140 项单测、Electron smoke/UI/业务/965 首回归全部通过；UI 回归断言真实播放只上报一次且不超过整曲时长；业务回归断言上报负载与失败静默。
+
+## 上一轮完成
 
 - `src/main/favorites-catalog.mjs`：50 首分页计数到末页、ID 去重、在途请求共享、刷新/账号变更失效、无进展保护。接口无可靠总数字段，不猜接口或硬编码 960/965。
 - `src/renderer/favorites-page.tsx`：总数与已加载数独立显示，底部预取下一批，错误保留内容并暂停自动重试；保留切页数据/滚动位置；播放全部先补齐分页，可取消准备。
@@ -32,7 +39,7 @@
 
 截图位于被忽略的 `release/qa/`，其中 `linux-favorites-965-synthetic.png` 与 Smoke MP3/FLAC 都是离线测试内容，绝不是用户真实账号数据。当前 AppImage 是内部测试，不代表 M1 或三端验收完成。
 
-本轮未读取/导入 `.local/` 私人会话、未执行任何真实账号写操作，因此没有新增真实对象需要清理。测试 profile 与合成资源由脚本 finally 清除。未上传仓库、安装包、日志，也未改系统代理。
+本轮未读取/导入 `.local/` 私人会话、未执行任何真实账号写操作，因此没有新增真实对象需要清理。测试 profile 与合成资源由脚本 finally 清除。源码后按用户授权提交至 Gitee 私有仓库；安装包/凭据/日志未上传，未改系统代理。
 
 ## 运行与剩余参与点
 
@@ -40,6 +47,8 @@
 - Linux 构建：`npm run dist:linux`；产物 `release/linux-x64/`。`test:packaged` 可检查 unpacked 或从 AppImage 提取的实际二进制。
 - 真实账号完整收藏：新增 `npm run test:login-live -- --login --qr --full-library`，同一次本人授权核验总数、完整分页和滚动加载，只输出统计；默认不会运行。真实 MP3/FLAC 播放仍另验，不以该脚本冒充。
 - 最新 AppImage：`release/linux-x64/huawei-music-desktop-0.0.1-linux-x86_64-internal.AppImage`；`release/linux-x64/SHA256SUMS` 已生成。`npm run test:packaged -- <AppImage路径>` 已通过，未上传。
+- Windows portable：`npm run dist:win:portable`，产物 `release/win-x64-portable/huawei-music-desktop-0.0.1-win-x64-portable-internal.exe`；`test:windows-portable` 与 SHA256SUMS 已通过。重复解压仅限程序文件，用户数据仍在 userData；Windows 真实恢复待验。免安装不代表凭据跨电脑便携。
+- `npm run test:portable-data` 在 Linux 实际 AppImage 上通过：第一次写合成设置/队列/本机存储后删除整份解压程序，再换新路径解压启动，userData 路径及三类数据均恢复；没有真实账号/凭据，不代表 Windows DPAPI 或启动速度已测。
 - 视觉选择：`design-previews/2026-10-15-desktop/index.html` 的 A/B/C/D，未选前保持当前基础样式。
 - Linux 密钥服务、真实听播、托盘/物理媒体键/睡眠仍需环境证据；Windows/macOS 原生测试延后，不阻塞共享逻辑。
 

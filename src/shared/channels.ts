@@ -12,6 +12,7 @@ export const channels = {
   musicArtist: 'music:artist',
   musicLyrics: 'music:lyrics',
   musicResolvePlayback: 'music:resolve-playback',
+  musicReportPlayback: 'music:report-playback',
   musicSetFavorite: 'music:set-favorite',
   musicFavoriteState: 'music:favorite-state',
   musicCreatePlaylist: 'music:create-playlist',

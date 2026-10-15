@@ -10,6 +10,7 @@ const suites = {
   business: [['node', 'scripts/test-electron-business.mjs']],
   favorites: [['node', 'scripts/test-electron-favorites.mjs']],
   packaged: [['node', 'scripts/test-packaged.mjs', ...process.argv.slice(3)]],
+  reextract: [['node', 'scripts/test-portable-data.mjs', ...process.argv.slice(3)]],
   callback: [['node', 'scripts/test-electron-login-callback.mjs']],
   cancel: [['node', 'scripts/test-electron-login-cancel.mjs']],
   navigation: [[electron, '--no-sandbox', 'scripts/test-electron-login-navigation.mjs']],

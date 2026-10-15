@@ -6,7 +6,9 @@ import {
   SettingsPage, type LibraryContext,
 } from './pages';
 import { FavoritesPage } from './favorites-page';
-import { autosaveDelay, buildShuffleOrder, onEndedAction, stepCursor } from './player.mjs';
+import {
+  autosaveDelay, buildShuffleOrder, historyReportDecision, onEndedAction, popPlayHistory, pushPlayHistory, stepCursor,
+} from './player.mjs';
 import { canRetryMediaFailure, reconcileTrackIndexes } from './track-reconcile.mjs';
 import type { AppSettings, AuthStatus, LyricsDoc, Playback, Playlist, Result, SavedQueue, Track } from '../shared/types';
 
@@ -74,6 +76,12 @@ export function App() {
   const repeatRef = useRef<AppSettings['repeatMode']>('off');
   const qualityRef = useRef<'standard' | 'lossless'>('standard');
   const volumeRef = useRef(0.85);
+  const syncHistoryRef = useRef(true);
+  const listenSeconds = useRef(0);
+  const lastListenAt = useRef(0);
+  const historyReported = useRef(false);
+  const playHistory = useRef<number[]>([]);
+  const reportHistoryRef = useRef<() => void>(() => {});
   const isResolvingTrack = useRef(false);
   const positionRef = useRef(0);
   positionRef.current = position;
@@ -143,10 +151,19 @@ export function App() {
     const element = audio.current;
     const isCurrentSource = () => activeAudioGeneration.current === playbackGeneration.current
       && !!activeAudioSource.current && element.src === activeAudioSource.current;
-    const time = () => { if (isCurrentSource() && !seeking.current) setPosition(element.currentTime); };
+    const time = () => {
+      if (!isCurrentSource() || seeking.current) return;
+      setPosition(element.currentTime);
+      // Count only real listening: a seek produces a large delta and is ignored here.
+      const delta = element.currentTime - lastListenAt.current;
+      if (delta > 0 && delta < 5) listenSeconds.current += delta;
+      lastListenAt.current = element.currentTime;
+      reportHistoryRef.current();
+    };
     const loaded = () => {
       if (!isCurrentSource()) return;
       setDuration(Number.isFinite(element.duration) ? element.duration : 0);
+      lastListenAt.current = element.currentTime;
       if (pendingSeek.current !== null && Number.isFinite(element.duration) && element.duration > 0) {
         element.currentTime = Math.min(pendingSeek.current, Math.max(0, element.duration - 0.5));
         pendingSeek.current = null;
@@ -172,6 +189,7 @@ export function App() {
     };
     const ended = () => {
       if (!isCurrentSource()) return;
+      reportHistoryRef.current();
       activeAudioSource.current = '';
       setBuffering(false); setPlaying(false);
       const step = onEndedAction(cursorRef.current, order.current.length, repeatRef.current);
@@ -265,6 +283,7 @@ export function App() {
     setRepeatMode(next.repeatMode);
     repeatRef.current = next.repeatMode;
     setShuffle(next.shuffle);
+    syncHistoryRef.current = next.syncHistory;
   }
 
   function identityOrder(count: number): number[] { return Array.from({ length: count }, (_, index) => index); }
@@ -277,9 +296,18 @@ export function App() {
     });
   }
 
-  async function playAt(nextCursor: number, retryCount = 0) {
+  async function playAt(nextCursor: number, retryCount = 0, options: { fromHistory?: boolean } = {}) {
     const track = queueRef.current[order.current[nextCursor]];
     if (!track || !audio.current) return;
+    if (!options.fromHistory) {
+      const previous = cursorRef.current;
+      if (previous >= 0 && previous !== nextCursor && previous < order.current.length) {
+        playHistory.current = pushPlayHistory(playHistory.current, previous);
+      }
+    }
+    listenSeconds.current = 0;
+    lastListenAt.current = 0;
+    historyReported.current = false;
     const generation = ++playbackGeneration.current;
     activeAudioGeneration.current = generation;
     activeAudioSource.current = '';
@@ -319,9 +347,28 @@ export function App() {
   }
   playAtRef.current = playAt;
 
+  // Best-effort history sync: silent on failure, at most once per playback, real seconds only.
+  function reportPlayback() {
+    if (!syncHistoryRef.current || historyReported.current) return;
+    const track = queueRef.current[order.current[cursorRef.current]];
+    if (!track) return;
+    const element = audio.current;
+    const duration = element && Number.isFinite(element.duration) ? element.duration : 0;
+    const decision = historyReportDecision({ listenedSeconds: listenSeconds.current, durationSeconds: duration, alreadyReported: false }) as { report: boolean; seconds: number };
+    if (!decision.report) return;
+    // Marked before the request so repeated timeupdate events cannot send twice.
+    historyReported.current = true;
+    void window.desktop.music.reportPlayback({
+      trackId: track.id, title: track.title, listenedSeconds: decision.seconds,
+      ...(duration > 0 ? { songDurationSeconds: Math.ceil(duration) } : {}),
+    }).catch(() => undefined);
+  }
+  reportHistoryRef.current = reportPlayback;
+
   function play(tracks: Track[], index: number) {
     if (!tracks.length) return;
     pendingSeek.current = null;
+    playHistory.current = [];
     queueRef.current = tracks;
     const nextOrder = shuffle ? buildShuffleOrder(tracks.length, index) : identityOrder(tracks.length);
     order.current = nextOrder;
@@ -346,6 +393,12 @@ export function App() {
     void playAt(step.cursor);
   }
   function goPrevious() {
+    // In shuffle mode 上一首 follows what was actually played instead of the shuffled index order.
+    if (shuffle && playHistory.current.length) {
+      const { cursor: target, history } = popPlayHistory(playHistory.current) as { cursor: number | null; history: number[] };
+      playHistory.current = history;
+      if (target !== null) { pendingSeek.current = null; void playAt(target, 0, { fromHistory: true }); return; }
+    }
     const step = stepCursor(cursorRef.current, order.current.length, -1, repeatRef.current);
     if (step.stopped) return;
     pendingSeek.current = null;
@@ -364,7 +417,17 @@ export function App() {
 
   async function updateSettings(patch: Partial<AppSettings>) {
     const result = await window.desktop.settings.update(patch).catch(() => null);
-    if (result?.ok) { applySettings(result.data); return true; }
+    if (result?.ok) {
+      if (patch.shuffle !== undefined && patch.shuffle !== shuffle) {
+        const active = order.current[cursorRef.current] ?? 0;
+        order.current = patch.shuffle ? buildShuffleOrder(queueRef.current.length, active) : identityOrder(queueRef.current.length);
+        cursorRef.current = Math.max(0, order.current.indexOf(active));
+        setCursor(cursorRef.current);
+        playHistory.current = [];
+      }
+      applySettings(result.data);
+      return true;
+    }
     setMessage('设置保存失败，请重试。');
     return false;
   }
@@ -378,6 +441,7 @@ export function App() {
     cursorRef.current = nextCursor < 0 ? 0 : nextCursor;
     setCursor(cursorRef.current);
     setShuffle(next);
+    playHistory.current = [];
     void updateSettings({ shuffle: next });
     setMessage(next ? '已开启随机播放。' : '已关闭随机播放。');
   }
@@ -450,6 +514,7 @@ export function App() {
     setAccountVersion(previous => previous + 1); setFavoriteChange(null);
     playbackGeneration.current += 1;
     pendingSeek.current = null;
+    listenSeconds.current = 0; lastListenAt.current = 0; historyReported.current = false; playHistory.current = [];
     window.clearTimeout(saveTimer.current); window.clearTimeout(positionTimer.current);
     positionRef.current = 0;
     activeAudioGeneration.current = playbackGeneration.current;

@@ -117,7 +117,7 @@ try {
   assert.deepEqual(boundary.authKeys, ['login', 'logout', 'onProgress', 'status']);
   assert.deepEqual(boundary.musicKeys, [
     'album', 'artist', 'createPlaylist', 'deletePlaylist', 'favoriteState', 'favorites', 'favoritesSummary', 'history', 'lyrics',
-    'playlistDetail', 'playlists', 'resolvePlayback', 'search', 'setFavorite', 'updatePlaylistDescription',
+    'playlistDetail', 'playlists', 'reportPlayback', 'resolvePlayback', 'search', 'setFavorite', 'updatePlaylistDescription',
   ]);
   assert.deepEqual(boundary.settingsKeys, ['get', 'update']);
   assert.deepEqual(boundary.queueKeys, ['load', 'save']);

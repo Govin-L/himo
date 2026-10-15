@@ -4,10 +4,11 @@ import { pathToFileURL } from 'node:url';
 import { cacheLibraryPage, clearMusicSession, clearPersonalData, loadCachedLibraryPage, loadMusicSession, loadWriteIntent, persistenceMode, saveMusicSession, saveWriteIntent, type StoredMusicSession } from './storage';
 import { createWriteController } from './writes.mjs';
 import { createFavoritesCatalog } from './favorites-catalog.mjs';
+import { createMemoryCache } from './memory-cache.mjs';
 import { sessionSaveOutcome } from './session-transition.mjs';
 import { createSessionEpoch } from './session-epoch.mjs';
 import {
-  album, artist, createPlaylist, deletePlaylist, favoriteExist, favorites, favoritesPage, history,
+  album, artist, createPlaylist, createRecentPlay, deletePlaylist, favoriteExist, favorites, favoritesPage, history,
   lyrics, openLogin, playlistDetail, playlists, resolvePlayback, search, setFavorite, updatePlaylistDescription,
 } from './huawei';
 import { isTrustedRendererUrl } from './renderer-origin.mjs';
@@ -17,6 +18,10 @@ import type {
   PlaylistDetail, PlaylistList, Result, SearchPage,
 } from '../shared/types';
 
+// Playlists change far less often than they are viewed; a short in-process cache keeps page
+// switches instant while explicit refresh and every playlist write still bypass it.
+export const PLAYLIST_CACHE_TTL_MS = 5 * 60_000;
+
 export class AuthManager {
   private session: StoredMusicSession['music'] | null = null;
   private persistence: 'secure' | 'memory-only' = persistenceMode();
@@ -24,6 +29,7 @@ export class AuthManager {
   private readonly sessionEpoch = createSessionEpoch();
   private writer: ReturnType<typeof createWriteController> | null = null;
   private catalog: ReturnType<typeof createFavoritesCatalog> | null = null;
+  private readonly memory = createMemoryCache({ ttlMs: PLAYLIST_CACHE_TTL_MS });
   constructor(private readonly progress: (message: string) => void,
     private readonly clearRendererData: () => Promise<void> = async () => undefined) {}
 
@@ -58,6 +64,7 @@ export class AuthManager {
         this.persistence = outcome === 'memory-only' ? 'memory-only' : 'secure';
         this.session = candidate;
         this.writer = null;
+        this.memory.clear();
         this.catalog?.invalidate(); this.catalog = null;
         return candidate;
       } finally { this.sessionEpoch.endTransition(); }
@@ -78,6 +85,7 @@ export class AuthManager {
       await clearMusicSession();
       this.session = null;
       this.writer = null;
+      this.memory.clear();
       this.catalog?.invalidate(); this.catalog = null;
       this.sessionEpoch.endTransition();
       return ok(undefined);
@@ -115,11 +123,30 @@ export class AuthManager {
       return fail(failure);
     }
   }
-  async getPlaylists(): Promise<Result<PlaylistList>> {
-    return this.#cachedRead('playlists', () => playlists(this.session!));
+  async getPlaylists(refresh = false): Promise<Result<PlaylistList>> {
+    if (!refresh) {
+      const hit = this.memory.get('playlists');
+      if (hit) return ok({ ...(hit.data as PlaylistList), cached: true, cachedAt: hit.savedAt });
+    }
+    const result = await this.#cachedRead('playlists', () => playlists(this.session!));
+    if (result.ok) this.memory.set('playlists', result.data);
+    return result;
   }
-  async getPlaylistDetail(playlistId: string, kind: Playlist['kind'], start: number, limit: number): Promise<Result<PlaylistDetail>> {
-    return this.#cachedRead(`playlist:${kind}:${playlistId}:${start}:${limit}`, () => playlistDetail(this.session!, playlistId, kind, start, limit));
+  async getPlaylistDetail(playlistId: string, kind: Playlist['kind'], start: number, limit: number, refresh = false): Promise<Result<PlaylistDetail>> {
+    const key = `playlist:${kind}:${playlistId}:${start}:${limit}`;
+    if (!refresh) {
+      const hit = this.memory.get(key);
+      if (hit) return ok({ ...(hit.data as PlaylistDetail), cached: true, cachedAt: hit.savedAt });
+    }
+    const result = await this.#cachedRead(key, () => playlistDetail(this.session!, playlistId, kind, start, limit));
+    if (result.ok) this.memory.set(key, result.data);
+    return result;
+  }
+  // Playback history sync is best effort: it must never interrupt playback or surface a provider
+  // error in the player UI, and it is never retried automatically.
+  async reportPlayback(input: { trackId: string; title: string; listenedSeconds: number; songDurationSeconds?: number }): Promise<Result<void>> {
+    const result = await this.#sessionRequest(() => createRecentPlay(this.session!, input), '账号状态已更改，本次播放未上报。');
+    return result.ok ? ok(undefined) : fail(result.error);
   }
   async getSearch(query: string, start: number, limit: number): Promise<Result<SearchPage>> {
     return this.#sessionRequest(() => search(this.session!, query, start, limit), '账号状态已更改，请重新搜索。');
@@ -159,13 +186,18 @@ export class AuthManager {
     return result;
   }
   async createPlaylist(name: string, trackIds: string[]): Promise<Result<{ id?: string }>> {
-    return this.#sessionWrite(() => this.writes().createPlaylist(name, trackIds));
+    return this.#playlistWrite(() => this.writes().createPlaylist(name, trackIds));
   }
   async updatePlaylistDescription(playlistId: string, description: string): Promise<Result<{ id: string }>> {
-    return this.#sessionWrite(() => this.writes().updateDescription(playlistId, description));
+    return this.#playlistWrite(() => this.writes().updateDescription(playlistId, description));
   }
   async deletePlaylist(playlistId: string): Promise<Result<{ id: string }>> {
-    return this.#sessionWrite(() => this.writes().deletePlaylist(playlistId));
+    return this.#playlistWrite(() => this.writes().deletePlaylist(playlistId));
+  }
+  async #playlistWrite<T>(run: () => Promise<T>): Promise<Result<T>> {
+    const result = await this.#sessionWrite(run);
+    if (result.ok) this.memory.invalidatePrefix('playlist');
+    return result;
   }
   async #sessionWrite<T>(run: () => Promise<T>): Promise<Result<T>> {
     if (this.loginPromise) return fail({ kind: 'unknown', message: '登录正在进行，请稍后再修改音乐库。', retryable: false });

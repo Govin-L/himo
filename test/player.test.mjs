@@ -1,6 +1,9 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { autosaveDelay, buildShuffleOrder, onEndedAction, orderWithActiveFirst, stepCursor } from '../src/renderer/player.mjs';
+import {
+  autosaveDelay, buildShuffleOrder, historyReportDecision, onEndedAction, orderWithActiveFirst,
+  popPlayHistory, pushPlayHistory, stepCursor,
+} from '../src/renderer/player.mjs';
 
 test('sequential stepping stops at the edges when repeat is off', () => {
   assert.deepEqual(stepCursor(0, 3, 1, 'off'), { cursor: 1, stopped: false });
@@ -42,6 +45,30 @@ test('recalculating the order keeps the active track first', () => {
   assert.equal(order[0], 3);
   assert.deepEqual([...order].sort((a, b) => a - b), [0, 1, 2, 3, 4, 5]);
   assert.deepEqual(orderWithActiveFirst(0, 2), []);
+});
+
+test('shuffle mode can walk back through what was actually played', () => {
+  let history = pushPlayHistory([], 3);
+  history = pushPlayHistory(history, 7);
+  assert.deepEqual(history, [3, 7]);
+  const step = popPlayHistory(history);
+  assert.equal(step.cursor, 7);
+  assert.deepEqual(step.history, [3]);
+  assert.deepEqual(popPlayHistory([]), { cursor: null, history: [] });
+  assert.deepEqual(pushPlayHistory([], -1), [], 'an invalid cursor must not enter the history');
+  assert.deepEqual(pushPlayHistory([], 0), [0]);
+  assert.deepEqual(pushPlayHistory([1, 2], 3, 2), [2, 3], 'history stays bounded');
+});
+
+test('history reporting waits for a real listen and never claims more than was played', () => {
+  assert.deepEqual(historyReportDecision({ listenedSeconds: 5, durationSeconds: 300, alreadyReported: false }), { report: false, seconds: 5 });
+  assert.deepEqual(historyReportDecision({ listenedSeconds: 30, durationSeconds: 300, alreadyReported: false }), { report: true, seconds: 30 });
+  assert.deepEqual(historyReportDecision({ listenedSeconds: 2, durationSeconds: 4, alreadyReported: false }), { report: true, seconds: 2 });
+  assert.deepEqual(historyReportDecision({ listenedSeconds: 99, durationSeconds: 10, alreadyReported: false }), { report: true, seconds: 10 });
+  assert.deepEqual(historyReportDecision({ listenedSeconds: 60, durationSeconds: null, alreadyReported: false }), { report: true, seconds: 60 });
+  assert.deepEqual(historyReportDecision({ listenedSeconds: 60, durationSeconds: 300, alreadyReported: true }), { report: false, seconds: 0 });
+  assert.deepEqual(historyReportDecision({ listenedSeconds: -3, durationSeconds: 300, alreadyReported: false }), { report: false, seconds: 0 });
+  assert.deepEqual(historyReportDecision({ listenedSeconds: Number.NaN, durationSeconds: 300, alreadyReported: false }), { report: false, seconds: 0 });
 });
 
 test('queue autosave settles when idle but still writes during continuous playback', () => {

@@ -29,17 +29,23 @@ export function registerIpc(
     return auth.getFavorites(start, limit, input.refresh ?? false);
   });
   ipcMain.handle(channels.musicFavoritesSummary, async event => { guard(event); return auth.getFavoritesSummary(); });
-  ipcMain.handle(channels.musicPlaylists, async event => { guard(event); return auth.getPlaylists(); });
-  ipcMain.handle(channels.musicPlaylistDetail, async (event, input: { id?: string; kind?: string; start?: number; limit?: number } = {}) => {
+  const refreshFlag = (value: unknown) => value === undefined || typeof value === 'boolean';
+  ipcMain.handle(channels.musicPlaylists, async (event, input: { refresh?: boolean } = {}) => {
+    guard(event);
+    if (!refreshFlag(input?.refresh)) throw new Error('歌单刷新参数无效');
+    return auth.getPlaylists(input.refresh ?? false);
+  });
+  ipcMain.handle(channels.musicPlaylistDetail, async (event, input: { id?: string; kind?: string; start?: number; limit?: number; refresh?: boolean } = {}) => {
     guard(event);
     const playlistId = idOf(input?.id);
     const start = input?.start ?? 0;
     const limit = input?.limit ?? 50;
     if (!playlistId || !['owned', 'collected', 'chart', 'unknown'].includes(input?.kind ?? '')
-      || !Number.isInteger(start) || start < 0 || start > 100000 || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+      || !Number.isInteger(start) || start < 0 || start > 100000 || !Number.isInteger(limit) || limit < 1 || limit > 50
+      || !refreshFlag(input?.refresh)) {
       throw new Error('歌单详情参数无效');
     }
-    return auth.getPlaylistDetail(playlistId, input.kind as 'owned' | 'collected' | 'chart' | 'unknown', start, limit);
+    return auth.getPlaylistDetail(playlistId, input.kind as 'owned' | 'collected' | 'chart' | 'unknown', start, limit, input.refresh ?? false);
   });
   ipcMain.handle(channels.musicSearch, async (event, input: { query?: string; start?: number; limit?: number } = {}) => {
     guard(event);
@@ -74,6 +80,19 @@ export function registerIpc(
     const trackId = idOf(input?.trackId);
     if (!trackId) throw new Error('歌词参数无效');
     return auth.getLyrics(trackId);
+  });
+  ipcMain.handle(channels.musicReportPlayback, async (event, input: { trackId?: string; title?: string; listenedSeconds?: number; songDurationSeconds?: number } = {}) => {
+    guard(event);
+    const trackId = idOf(input?.trackId);
+    const title = typeof input?.title === 'string' ? input.title.trim() : '';
+    const listened = input?.listenedSeconds;
+    const songDuration = input?.songDurationSeconds;
+    const validDuration = (value: unknown) => value === undefined || (typeof value === 'number' && Number.isFinite(value) && value >= 0 && value <= 24 * 3600);
+    if (!trackId || !title || title.length > 200 || typeof listened !== 'number' || !Number.isFinite(listened)
+      || listened < 0 || listened > 24 * 3600 || !validDuration(songDuration)) {
+      throw new Error('播放历史上报参数无效');
+    }
+    return auth.reportPlayback({ trackId, title, listenedSeconds: listened, songDurationSeconds: songDuration });
   });
   ipcMain.handle(channels.musicFavoriteState, async (event, input: { trackId?: string } = {}) => {
     guard(event);

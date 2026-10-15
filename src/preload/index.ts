@@ -16,7 +16,7 @@ const api: DesktopApi = {
   music: {
     favorites: input => ipcRenderer.invoke(channels.musicFavorites, input),
     favoritesSummary: () => ipcRenderer.invoke(channels.musicFavoritesSummary),
-    playlists: () => ipcRenderer.invoke(channels.musicPlaylists),
+    playlists: input => ipcRenderer.invoke(channels.musicPlaylists, input),
     playlistDetail: input => ipcRenderer.invoke(channels.musicPlaylistDetail, input),
     search: input => ipcRenderer.invoke(channels.musicSearch, input),
     history: () => ipcRenderer.invoke(channels.musicHistory),
@@ -24,6 +24,7 @@ const api: DesktopApi = {
     artist: input => ipcRenderer.invoke(channels.musicArtist, input),
     lyrics: input => ipcRenderer.invoke(channels.musicLyrics, input),
     resolvePlayback: input => ipcRenderer.invoke(channels.musicResolvePlayback, input),
+    reportPlayback: input => ipcRenderer.invoke(channels.musicReportPlayback, input),
     favoriteState: input => ipcRenderer.invoke(channels.musicFavoriteState, input),
     setFavorite: input => ipcRenderer.invoke(channels.musicSetFavorite, input),
     createPlaylist: input => ipcRenderer.invoke(channels.musicCreatePlaylist, input),

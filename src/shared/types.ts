@@ -37,8 +37,8 @@ export type Playlist = {
   description?: string;
 };
 
-export type PlaylistList = { playlists: Playlist[]; truncated: boolean; cacheHint?: string };
-export type PlaylistDetail = { playlist: Playlist; tracks: Track[]; nextStart: number; hasMore: boolean; cacheHint?: string };
+export type PlaylistList = { playlists: Playlist[]; truncated: boolean; cacheHint?: string; cached?: boolean; cachedAt?: number };
+export type PlaylistDetail = { playlist: Playlist; tracks: Track[]; nextStart: number; hasMore: boolean; cacheHint?: string; cached?: boolean; cachedAt?: number };
 export type SearchPage = { tracks: Track[]; nextStart: number; hasMore: boolean; total?: number };
 export type HistoryPage = { tracks: Track[] };
 export type LyricsLine = { timeMs: number | null; text: string };
@@ -72,6 +72,9 @@ export type AppSettings = {
   volume: number;
   repeatMode: RepeatMode;
   shuffle: boolean;
+  // Report real playback to Huawei history. Endpoint shape comes from the public H5 bundle;
+  // real-account acceptance is still pending, so failures stay silent and are never retried.
+  syncHistory: boolean;
 };
 
 export type SavedQueue = {
@@ -90,14 +93,15 @@ export type DesktopApi = {
   music: {
     favorites(input?: { start?: number; limit?: number; refresh?: boolean }): Promise<Result<FavoritesPage>>;
     favoritesSummary(): Promise<Result<{ total: number }>>;
-    playlists(): Promise<Result<PlaylistList>>;
-    playlistDetail(input: { id: string; kind: Playlist['kind']; start?: number; limit?: number }): Promise<Result<PlaylistDetail>>;
+    playlists(input?: { refresh?: boolean }): Promise<Result<PlaylistList>>;
+    playlistDetail(input: { id: string; kind: Playlist['kind']; start?: number; limit?: number; refresh?: boolean }): Promise<Result<PlaylistDetail>>;
     search(input: { query: string; start?: number; limit?: number }): Promise<Result<SearchPage>>;
     history(): Promise<Result<HistoryPage>>;
     album(input: { id: string; start?: number; limit?: number }): Promise<Result<AlbumDetail>>;
     artist(input: { id: string }): Promise<Result<ArtistDetail>>;
     lyrics(input: { trackId: string }): Promise<Result<LyricsDoc>>;
     resolvePlayback(input: { trackId: string; quality: 'standard' | 'lossless' }): Promise<Result<Playback>>;
+    reportPlayback(input: { trackId: string; title: string; listenedSeconds: number; songDurationSeconds?: number }): Promise<Result<void>>;
     favoriteState(input: { trackId: string }): Promise<Result<{ favorite: boolean }>>;
     setFavorite(input: { trackId: string; favorite: boolean }): Promise<Result<{ favorite: boolean }>>;
     createPlaylist(input: { name: string; trackIds: string[] }): Promise<Result<{ id?: string }>>;

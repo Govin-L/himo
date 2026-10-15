@@ -29,15 +29,21 @@ export function PlaylistsPage({ ctx }: { ctx: LibraryContext }) {
   const [loaded, setLoaded] = useState(false);
   const [creating, setCreating] = useState(false);
   const [name, setName] = useState('');
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
 
-  async function load() {
+  function setCached(cached: boolean, savedAt?: number) {
+    setCachedAt(cached && savedAt ? savedAt : null);
+  }
+
+  async function load(refresh = false) {
     const id = ++requestId.current;
     ctx.setBusy(true);
-    const result = await ctx.run(() => window.desktop.music.playlists(), '读取歌单失败，请重试。');
+    const result = await ctx.run(() => window.desktop.music.playlists({ refresh }), '读取歌单失败，请重试。');
     if (id !== requestId.current) return;
     if (result) {
       setPlaylists(result.playlists);
       setTruncated(result.truncated);
+      setCached(result.cached === true, result.cachedAt);
       setLoaded(true);
       if (result.cacheHint) ctx.notice(result.cacheHint);
     }
@@ -57,15 +63,16 @@ export function PlaylistsPage({ ctx }: { ctx: LibraryContext }) {
     ctx.notice(`已创建歌单「${name}」，包含 ${trackIds.length} 首歌曲。`);
     setName('');
     setCreating(false);
-    await load();
+    await load(true);
   }
 
   return <section className="library">
     <div className="library-head">
-      <span>{loaded ? `${playlists.length} 个歌单${truncated ? ' · 仅显示部分' : ''}` : '歌单尚未读取'}</span>
+      <span>{loaded ? `${playlists.length} 个歌单${truncated ? ' · 仅显示部分' : ''}${cachedAt ? ' · 缓存' : ''}` : '歌单尚未读取'}</span>
       <div className="head-actions">
         <button className="ghost" onClick={() => setCreating(value => !value)} disabled={ctx.busy}>新建歌单</button>
-        <button className="ghost" onClick={() => void load()} disabled={ctx.busy}>刷新</button>
+        {cachedAt && <span className="hint">显示本地缓存（{new Date(cachedAt).toLocaleTimeString('zh-CN')}）</span>}
+        <button className="ghost" onClick={() => void load(true)} disabled={ctx.busy}>刷新</button>
       </div>
     </div>
     {creating && <div className="inline-form">
@@ -85,11 +92,12 @@ export function PlaylistDetailPage({ ctx, playlist }: { ctx: LibraryContext; pla
   const nextStart = useRef(0);
 
   const requestId = useRef(0);
-  async function load(start = 0, append = false) {
+  const [cachedAt, setCachedAt] = useState<number | null>(null);
+  async function load(start = 0, append = false, refresh = false) {
     if (playlist.kind === 'chart') return;
     const request = ++requestId.current;
     ctx.setBusy(true);
-    const result = await ctx.run(() => window.desktop.music.playlistDetail({ id: playlist.id, kind: playlist.kind, start, limit: PAGE }), '读取歌单失败；已有内容可能不是最新，请重试。');
+    const result = await ctx.run(() => window.desktop.music.playlistDetail({ id: playlist.id, kind: playlist.kind, start, limit: PAGE, refresh }), '读取歌单失败；已有内容可能不是最新，请重试。');
     if (request !== requestId.current) return;
     if (result) {
       setDetail(previous => {
@@ -97,6 +105,7 @@ export function PlaylistDetailPage({ ctx, playlist }: { ctx: LibraryContext; pla
         return { playlist: result.playlist, tracks: merged.tracks, hasMore: merged.hasMore };
       });
       if (result.cacheHint) ctx.notice(result.cacheHint);
+      setCachedAt(result.cached === true && result.cachedAt ? result.cachedAt : null);
       if (!append) setDescription(result.playlist.description ?? '');
       nextStart.current = result.nextStart;
     }
@@ -112,7 +121,7 @@ export function PlaylistDetailPage({ ctx, playlist }: { ctx: LibraryContext; pla
     ctx.setBusy(false);
     if (!result) return;
     ctx.notice('已保存歌单简介。');
-    await load();
+    await load(0, false, true);
   }
 
   async function remove() {
@@ -127,10 +136,10 @@ export function PlaylistDetailPage({ ctx, playlist }: { ctx: LibraryContext; pla
 
   return <section className="library">
     <div className="library-head">
-      <span>{detail ? `${detail.playlist.title} · ${detail.tracks.length} 首${detail.hasMore ? ' 以上' : ''}` : playlist.title}</span>
+      <span>{detail ? `${detail.playlist.title} · ${detail.tracks.length} 首${detail.hasMore ? ' 以上' : ''}${cachedAt ? ' · 缓存' : ''}` : playlist.title}</span>
       <div className="head-actions">
         {detail?.tracks.length ? <button className="text-button" onClick={() => ctx.play(detail.tracks, 0)}>{detail.hasMore ? `播放已加载 ${detail.tracks.length} 首` : '播放全部'}</button> : null}
-        <button className="ghost" onClick={() => void load()} disabled={ctx.busy}>刷新</button>
+        <button className="ghost" onClick={() => void load(0, false, true)} disabled={ctx.busy}>刷新</button>
         {playlist.kind === 'owned' && <button className="ghost danger" onClick={() => setConfirmDelete(true)} disabled={ctx.busy}><Trash2 size={14} />删除</button>}
       </div>
     </div>
@@ -288,12 +297,24 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
       </label>
       <label>
         <span>播放模式</span>
-        <select aria-label="播放模式" value={settings?.repeatMode ?? 'off'} onChange={event => void ctx.updateSettings({ repeatMode: event.target.value as AppSettings['repeatMode'] })}>
+        <select aria-label="播放模式" value={settings?.shuffle ? 'shuffle' : settings?.repeatMode ?? 'off'}
+          onChange={event => {
+            const value = event.target.value;
+            if (value === 'shuffle') void ctx.updateSettings({ shuffle: true, repeatMode: 'off' });
+            else void ctx.updateSettings({ shuffle: false, repeatMode: value as AppSettings['repeatMode'] });
+          }}>
           <option value="off">顺序播放</option>
           <option value="all">列表循环</option>
           <option value="one">单曲循环</option>
+          <option value="shuffle">随机播放（打乱队列顺序）</option>
         </select>
       </label>
+      <label>
+        <span>同步播放到华为历史</span>
+        <input type="checkbox" aria-label="同步播放到华为历史" checked={settings?.syncHistory ?? true}
+          onChange={event => void ctx.updateSettings({ syncHistory: event.target.checked })} />
+      </label>
+      <p className="hint">开启后，实际听到一定时长才会上报；快速跳过的曲目不记入华为历史，也不上报播放器未真实播放的秒数。接口形态来自公开 H5 资源，尚未用真实账号验证，失败不影响播放。</p>
       <button className="ghost danger" onClick={() => void window.desktop.app.quit()}>退出程序</button>
       <p className="hint">当前版本 {__APP_VERSION__}（第三方内部测试构建）。凭证由系统安全存储保存；系统安全存储不可用时退出后需重新登录。首版不提供自动更新。</p>
     </div>
