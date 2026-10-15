@@ -1,0 +1,142 @@
+import { app, ipcMain, type BrowserWindow } from 'electron';
+import { channels } from '../shared/channels';
+import { AuthManager, isAllowedSender } from './auth-manager';
+import { loadQueue, loadSettings, saveQueue, updateSettings } from './storage';
+import { fail, ok } from '../shared/result';
+import type { SavedQueue } from '../shared/types';
+
+export function registerIpc(
+  window: BrowserWindow,
+  auth: AuthManager,
+  hooks: { onCloseBehavior?: (value: 'quit' | 'tray') => void } = {},
+): void {
+  const guard = (event: Electron.IpcMainInvokeEvent) => {
+    if (!isAllowedSender(window, event)) throw new Error('IPC 来源不受信任');
+  };
+  const idOf = (value: unknown) => (typeof value === 'string' && value.trim() && value.length <= 200 ? value.trim() : null);
+  for (const channel of Object.values(channels)) ipcMain.removeHandler(channel);
+  ipcMain.handle(channels.authStatus, async event => { guard(event); return auth.status(); });
+  ipcMain.handle(channels.authLogin, async event => { guard(event); return auth.login(); });
+  ipcMain.handle(channels.authLogout, async event => { guard(event); return auth.logout(); });
+  ipcMain.handle(channels.musicFavorites, async (event, input: { start?: number; limit?: number; refresh?: boolean } = {}) => {
+    guard(event);
+    const start = input?.start ?? 0;
+    const limit = input?.limit ?? 50;
+    if (!Number.isInteger(start) || start < 0 || start > 100000 || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+      throw new Error('收藏分页参数无效');
+    }
+    if (input.refresh !== undefined && (typeof input.refresh !== 'boolean' || (input.refresh && start !== 0))) throw new Error('收藏刷新参数无效');
+    return auth.getFavorites(start, limit, input.refresh ?? false);
+  });
+  ipcMain.handle(channels.musicFavoritesSummary, async event => { guard(event); return auth.getFavoritesSummary(); });
+  ipcMain.handle(channels.musicPlaylists, async event => { guard(event); return auth.getPlaylists(); });
+  ipcMain.handle(channels.musicPlaylistDetail, async (event, input: { id?: string; kind?: string; start?: number; limit?: number } = {}) => {
+    guard(event);
+    const playlistId = idOf(input?.id);
+    const start = input?.start ?? 0;
+    const limit = input?.limit ?? 50;
+    if (!playlistId || !['owned', 'collected', 'chart', 'unknown'].includes(input?.kind ?? '')
+      || !Number.isInteger(start) || start < 0 || start > 100000 || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+      throw new Error('歌单详情参数无效');
+    }
+    return auth.getPlaylistDetail(playlistId, input.kind as 'owned' | 'collected' | 'chart' | 'unknown', start, limit);
+  });
+  ipcMain.handle(channels.musicSearch, async (event, input: { query?: string; start?: number; limit?: number } = {}) => {
+    guard(event);
+    const query = typeof input?.query === 'string' ? input.query.trim() : '';
+    const start = input?.start ?? 0;
+    const limit = input?.limit ?? 20;
+    if (!query || query.length > 80 || !Number.isInteger(start) || start < 0 || start > 100000
+      || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+      throw new Error('搜索参数无效');
+    }
+    return auth.getSearch(query, start, limit);
+  });
+  ipcMain.handle(channels.musicHistory, async event => { guard(event); return auth.getRemoteHistory(); });
+  ipcMain.handle(channels.musicAlbum, async (event, input: { id?: string; start?: number; limit?: number } = {}) => {
+    guard(event);
+    const albumId = idOf(input?.id);
+    const start = input?.start ?? 0;
+    const limit = input?.limit ?? 50;
+    if (!albumId || !Number.isInteger(start) || start < 0 || start > 100000 || !Number.isInteger(limit) || limit < 1 || limit > 50) {
+      throw new Error('专辑参数无效');
+    }
+    return auth.getAlbum(albumId, start, limit);
+  });
+  ipcMain.handle(channels.musicArtist, async (event, input: { id?: string } = {}) => {
+    guard(event);
+    const artistId = idOf(input?.id);
+    if (!artistId) throw new Error('歌手参数无效');
+    return auth.getArtist(artistId);
+  });
+  ipcMain.handle(channels.musicLyrics, async (event, input: { trackId?: string } = {}) => {
+    guard(event);
+    const trackId = idOf(input?.trackId);
+    if (!trackId) throw new Error('歌词参数无效');
+    return auth.getLyrics(trackId);
+  });
+  ipcMain.handle(channels.musicFavoriteState, async (event, input: { trackId?: string } = {}) => {
+    guard(event);
+    const trackId = idOf(input?.trackId);
+    if (!trackId) throw new Error('收藏状态参数无效');
+    return auth.getFavoriteState(trackId);
+  });
+  ipcMain.handle(channels.musicSetFavorite, async (event, input: { trackId?: string; favorite?: boolean } = {}) => {
+    guard(event);
+    const trackId = idOf(input?.trackId);
+    if (!trackId || typeof input?.favorite !== 'boolean') throw new Error('收藏参数无效');
+    return auth.setFavorite(trackId, input.favorite);
+  });
+  ipcMain.handle(channels.musicCreatePlaylist, async (event, input: { name?: string; trackIds?: unknown } = {}) => {
+    guard(event);
+    const name = typeof input?.name === 'string' ? input.name.trim() : '';
+    const trackIds = Array.isArray(input?.trackIds) ? input.trackIds.filter((value): value is string => typeof value === 'string' && !!value && value.length <= 200).slice(0, 200) : [];
+    if (!name || name.length > 60 || !trackIds.length || trackIds.length !== (Array.isArray(input?.trackIds) ? input.trackIds.length : 0)) {
+      throw new Error('创建歌单参数无效');
+    }
+    return auth.createPlaylist(name, trackIds);
+  });
+  ipcMain.handle(channels.musicUpdatePlaylistDescription, async (event, input: { id?: string; description?: string } = {}) => {
+    guard(event);
+    const playlistId = idOf(input?.id);
+    if (!playlistId || typeof input?.description !== 'string' || input.description.length > 200) throw new Error('简介参数无效');
+    return auth.updatePlaylistDescription(playlistId, input.description);
+  });
+  ipcMain.handle(channels.musicDeletePlaylist, async (event, input: { id?: string } = {}) => {
+    guard(event);
+    const playlistId = idOf(input?.id);
+    if (!playlistId) throw new Error('歌单 ID 无效');
+    return auth.deletePlaylist(playlistId);
+  });
+  ipcMain.handle(channels.musicResolvePlayback, async (event, input: { trackId: string; quality: 'standard' | 'lossless' }) => {
+    guard(event);
+    if (!input || !idOf(input.trackId) || !['standard', 'lossless'].includes(input.quality)) {
+      throw new Error('播放参数无效');
+    }
+    return auth.getPlayback(input.trackId, input.quality);
+  });
+  ipcMain.handle(channels.settingsGet, async event => { guard(event); return ok(await loadSettings()); });
+  ipcMain.handle(channels.settingsUpdate, async (event, input: unknown) => {
+    guard(event);
+    return ok(await updateSettings(input));
+  });
+  ipcMain.handle(channels.queueLoad, async event => { guard(event); return ok(await loadQueue()); });
+  ipcMain.handle(channels.queueSave, async (event, input: unknown) => {
+    guard(event);
+    const queue = (input ?? {}) as { tracks?: unknown };
+    if (!queue || typeof queue !== 'object' || !Array.isArray(queue.tracks) || queue.tracks.length > 10000
+      || JSON.stringify(queue).length > 5 * 1024 * 1024) return fail({ kind: 'invalid', message: '队列数据无效或过大。', retryable: false });
+    if (!auth.canSaveQueue()) return fail({ kind: 'auth', message: '账号切换正在进行，队列未保存。', retryable: false });
+    await saveQueue(queue as SavedQueue);
+    return ok(undefined);
+  });
+  ipcMain.handle(channels.windowSetCloseBehavior, async (event, input: 'quit' | 'tray') => {
+    guard(event);
+    if (!['quit', 'tray'].includes(input)) throw new Error('关闭行为无效');
+    const next = await updateSettings({ closeBehavior: input });
+    hooks.onCloseBehavior?.(next.closeBehavior);
+    return ok(next);
+  });
+  ipcMain.handle(channels.windowMinimize, async event => { guard(event); window.minimize(); });
+  ipcMain.handle(channels.appQuit, async event => { guard(event); app.quit(); });
+}

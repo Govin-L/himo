@@ -1,0 +1,21 @@
+# 项目工作规则
+
+- 本项目是华为音乐独立第三方桌面客户端；不用其他平台音源，不依赖手机充当播放器。
+- 已有 Electron + React + TypeScript 客户端与 Linux Electron 自动化；实际验收以 `docs/IMPLEMENTATION_STATUS.md` 为准。当前以 Linux 完成共享 API/页面/播放器验证，不用 Windows/macOS 或 Wine 阻塞开发；未验平台不能宣称已验收。不要重新选 Tauri/Go。
+- 开工先读 `README.md`、`docs/IMPLEMENTATION_PLAN.md`、`docs/API_CONTRACT.md`、`docs/authorized-feature-validation.md`。
+- 交接任务书：`docs/IMPLEMENTER_PROMPT.md`。按 M0–M6 推进，先完成真实登录和 MP3/FLAC 播放，再铺 UI。
+- 启动：`npm ci && npm start`；检查：`npm test`、`typecheck`、`build`、`test:electron`、`test:electron-ui`、`test:electron-business`、`test:electron-favorites`。后两项含合成账号/965 首夹具，不能当私人账号证据。`probe:login` / `probe:music` 会请求外网但不登录个人账号。
+- 现有 `src/*.mjs` 和 `test/` 是独立协议原型，可迁移复用；`scripts/` 为实验命令，不能全部塞进发行包。
+- `.local/` 包含真实账号凭据和音乐库数据：禁止打印/上传/提交/打包。`research/` 为本地研究材料，同样不得进入发行包。
+- 不主动调用保存的私人会话或重跑写测试；真实个人联网验证需当前用户授权。写操作只能用本次确定的临时对象并最终读回确认清理。
+- 方案文档是目标要求，不是已实现状态。历史研究描述遇到冲突，以最新实测和 README 当前状态为准。
+- 音乐 token 与账号 AT 不同：AT=1小时；音乐会话超过1小时仍可用，约7天只是到期字段线索。自动续期未打通。
+- 每日推荐首版不做；歌单简介编辑已测，不等于改名/曲目编辑/封面均已测。
+- playlist/detail/all 要真实 playListID；自建歌单删除用 playlist/delete，不能用 favorite/delete 的成功码冒充删除完成。
+- playback 顶层 fileURL 是音频，fileInfos 可能是 JSON。auditionTime 不能单独判为30秒试听；完整播放按实际权限、资源和时长验证。
+- 收藏没有已确认的直接总数字段：总数由主进程完整分页后 ID 去重得到，与“已加载 N 首”分开。保留滚动自动加载/失败重试/切页位置；禁止用首屏数量冒充总数或把合成数据截图当本人音乐库。
+- 主进程持有凭据与业务 HTTP；renderer 只用白名单 IPC。远程登录页无 preload/Node/业务 IPC。
+- 不关闭 webSecurity/TLS 校验；不抢占系统 hms://；不把研究原型的0600明文文件当正式安全存储。
+- 不创建复杂抽象、插件框架、后端服务、云端令牌代理或移动端工程。
+- 不擅自公开仓库/产物、变更系统代理或删除研究现场。
+- 实现阶段维护简短 `docs/IMPLEMENTATION_STATUS.md`，按真实证据标 pending/in-progress/verified；没有测试的平台不宣称支持已验收。
