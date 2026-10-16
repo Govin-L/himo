@@ -130,15 +130,17 @@ try {
   const archive = join(appRoot, 'resources', 'app.asar');
   const unpackedArchive = join(dirname(artifact), 'win-unpacked', 'resources', 'app.asar');
   assert.equal(hash(await readFile(archive)), hash(await readFile(unpackedArchive)), 'embedded app differs from the unpacked build');
-  // electron-builder stores asar entry names with backslashes on Windows, so keep the raw name
-  // for extraction and use the normalised form only for prefix/path checks.
-  const rawEntries = asar.listPackage(archive);
-  const entries = rawEntries.map(path => path.replaceAll('\\', '/'));
+  // Unpack the asar and compare real files: entry-name separators and leading slashes differ
+  // between platforms, and @electron/asar lookups are sensitive to that.
+  const unpackedAsar = join(root, 'asar');
+  asar.extractAll(archive, unpackedAsar);
+  const entries = await walkFiles(unpackedAsar);
   assert.deepEqual(entries.filter(path => forbidden.test(path)), [], 'private paths in app.asar');
-  for (const raw of rawEntries) {
-    const normalized = raw.replaceAll('\\', '/');
-    if (!normalized.startsWith('/out/') || asar.statFile(archive, raw).files) continue;
-    assert.equal(hash(asar.extractFile(archive, raw)), hash(await readFile(normalized.slice(1))), `outdated bundled output: ${normalized}`);
+  for (const required of ['out/main/index.js', 'out/preload/index.cjs', 'out/renderer/index.html', 'package.json']) {
+    assert.ok(entries.includes(required), `app.asar is missing ${required}`);
+  }
+  for (const entry of entries.filter(path => path.startsWith('out/'))) {
+    assert.equal(hash(await readFile(join(unpackedAsar, entry))), hash(await readFile(entry)), `outdated bundled output: ${entry}`);
   }
   const appBytes = await readFile(join(appRoot, appExe));
   const appPe = peHeader(appBytes);
