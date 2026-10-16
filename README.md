@@ -114,6 +114,15 @@ node scripts/release-checksums.mjs release/win-x64-portable
 - 当前产物约 95 MiB，已在 Linux 静态拆包确认内嵌应用为 x64、内容与当前 `out/` 一致、无私人资料且无签名；外层 NSIS 启动器为 x86，不改变内嵌程序的 x64 要求。**尚未在 Windows 启动、听播或验证凭据恢复**。
 - 未签名程序可能被 SmartScreen 或企业安全策略拦截；不要求关闭防护或绕过组织策略。仅供已知来源的内部测试，不自动上传或公开分发。
 
+## GitHub Actions 自动打包（仅 Windows 便携版）
+
+`.github/workflows/windows-portable.yml` 在 **windows-latest** 上自动：`npm ci` → 单元测试 → `dist:win:portable` → 静态校验（内嵌 x64、无私人目录、图标像素、与当前构建一致）→ 生成 SHA256SUMS → 上传 artifact。
+
+- 触发：Actions 页手动 `Run workflow`，或推送 `v*` 标签；默认**不在每次 push 时构建**，因为私有仓库免费额度为每月 2000 分钟、Windows runner 按 2 倍计费（一次约 10–20 计费分钟）。
+- 手动触发时可勾选 `smoke`，额外在 Windows 上跑一次 Electron 烟测（失败不阻断产物）。
+- 产物仅上传到 Actions artifact（保留 7 天，私有仓库存储有限），**不自动发布 Release、不自动上传 OSS**；下载后请核对 SHA256SUMS。
+- GitHub 上的工作流尚未实际跑过（本地无法执行 Windows runner）；首次运行需在 Actions 页确认，若失败以运行日志为准。
+
 ## 已知边界
 
 - AT 实测 3600 秒，音乐 Token 是另一种凭据；新进程 78 分钟复用曾成功，约 7 天只是到期字段线索，不能承诺固定期限。

@@ -1,0 +1,83 @@
+name: Windows portable (internal, unsigned)
+
+# Runs only when asked or when a version tag is pushed, because GitHub Free gives
+# private repositories 2000 Action minutes per month and Windows runners bill at 2x.
+# Add a `push: branches: [main]` trigger below if you want every push packaged.
+on:
+  workflow_dispatch:
+    inputs:
+      smoke:
+        description: Also run the Windows Electron smoke test (uses more minutes)
+        type: boolean
+        default: false
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: windows-portable-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  package:
+    runs-on: windows-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # Electron and electron-builder download large binaries; caching them saves minutes.
+      - uses: actions/cache@v4
+        with:
+          path: |
+            ~/AppData/Local/electron/Cache
+            ~/AppData/Local/electron-builder/Cache
+          key: electron-${{ runner.os }}-${{ hashFiles('package-lock.json') }}
+          restore-keys: electron-${{ runner.os }}-
+
+      - name: Install dependencies
+        run: npm ci --no-audit --no-fund
+
+      - name: Offline unit tests
+        run: npm test
+
+      - name: Build single-file portable EXE
+        run: npm run dist:win:portable
+
+      - name: Verify packaged EXE (static, no execution)
+        shell: pwsh
+        run: |
+          $exe = Get-ChildItem release/win-x64-portable/*.exe | Select-Object -First 1
+          if (-not $exe) { throw 'no portable EXE was produced' }
+          npm run test:windows-portable -- $exe.FullName
+
+      - name: Write SHA256SUMS
+        run: node scripts/release-checksums.mjs release/win-x64-portable
+
+      - name: Show checksums
+        shell: pwsh
+        run: Get-Content release/win-x64-portable/SHA256SUMS
+
+      # Optional: verifies the real Electron runtime on Windows. Not part of the default run
+      # because it uses extra minutes and the static check above already guards the artifact.
+      - name: Windows Electron smoke (optional)
+        if: ${{ inputs.smoke == true }}
+        continue-on-error: true
+        run: npm run test:electron
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: huawei-music-study-windows-x64-unsigned
+          path: |
+            release/win-x64-portable/*.exe
+            release/win-x64-portable/SHA256SUMS
+          if-no-files-found: error
+          # Private-repo storage is limited (500 MB on Free); artifacts expire automatically.
+          retention-days: 7
