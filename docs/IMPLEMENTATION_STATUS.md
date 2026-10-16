@@ -14,7 +14,14 @@
 | M5 视觉与系统集成 | in-progress | Linux Electron 实际截图覆盖 1180×760、960×640、歌词/队列互斥、固定播放器/侧栏。中文字体测试缓存隔离修复，不修改系统。托盘/关闭/媒体键有代码，物理媒体键、无托盘桌面及睡眠恢复仍待验。四方向样机已提供，**用户尚未选择，不宣称视觉定稿**。 |
 | M6 发行工程 | in-progress | Linux x64 AppImage 已构建；从实际 AppImage 提取二进制并启动隔离 profile，核对打包文件与当前 out 一致、renderer 无 Node、设置可保存，全部通过。Windows x64 单文件 portable EXE 已按后续用户要求在 Linux 交叉打包成功（99,522,256 字节，未用 Wine）；静态拆包确认内嵌 x64、无私有目录/源码、与当前 out 一致。启动速度/Windows 登录恢复/媒体仍未验收。原生 NSIS 安装包与 macOS arm64/x64 DMG 入口保留；不把历史失败的 NSIS 中间产物当安装包。deb 等待真实主页/维护者身份，不编造。 |
 
-## 本轮完成（第四批：去掉默认菜单 / 改名学习版）
+## CI：GitHub Actions 原生 Windows 打包（已跑通）
+
+- 仓库镜像到 GitHub 私有仓库（`talongao/huawei-music-desktop`），新增 `.github/workflows/windows-portable.yml`：手动或 `v*` 标签触发，windows-latest 上执行 `npm ci` → 单元测试 → `dist:win:portable` → 静态校验 → SHA256SUMS → artifact（保留 7 天），不自动发布、不上传 OSS。
+- 首次运行验证：run 38936061865 全绿，产物 100,141,218 字节，`SHA256 6d8c829c1613f46da6c01abb04699e7fe8a0001bbfe2de46424d3373dc7b774e`，应用 exe 名称为“华为音乐第三方客户端（学习版）.exe”，图标像素校验通过。
+- 为让校验适配 Windows，静态检查改为：解包定位（不解析 7-Zip 清单文本）、兼容展平布局、asar 解包后按文件比对（不再依赖 asar 条目分隔符）。这些修复保留了 Linux 侧原有的 payload 名与 PE 架构断言。
+- 原生 Windows 构建与本地 Linux 交叉构建字节不同，两者均通过同一套静态校验；**Windows 启动/播放仍未验收**。
+
+## 第四批完成（去掉默认菜单 / 改名学习版）
 
 - 移除 Electron 默认菜单：Windows/Linux `Menu.setApplicationMenu(null)`，窗口 `autoHideMenuBar`；macOS 仅保留 appMenu/editMenu/windowMenu 最小角色，Cmd+Q 等仍可用。smoke 回归新增断言：应用菜单为 null 且窗口菜单栏不可见。
 - 改名为“华为音乐第三方客户端（学习版）”：显示名集中在 `src/shared/app-name.mjs`（窗口标题、侧栏、设置页、托盘 tooltip），`build.productName` 同步改为该名称，exe 显示名与 Linux desktop `Name` 一致；`package.json` 的 `name` 与 `appId` 未改，因此 userData 目录和已存设置/登录数据不迁移、不丢失。
