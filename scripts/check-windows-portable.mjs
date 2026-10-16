@@ -82,7 +82,8 @@ function list(archive) {
   return entries;
 }
 function extract(archive, destination) {
-  execFileSync(sevenZip, ['x', '-y', `-o${destination}`, archive], { stdio: 'ignore' });
+  // Keep 7-Zip's output so a platform-specific failure is diagnosable from the CI log.
+  return execFileSync(sevenZip, ['x', '-y', `-o${destination}`, archive], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
 }
 // 7-Zip's -slt listing layout differs between platforms, so locate the embedded payload by
 // unpacking the wrapper instead of parsing its file table.
@@ -91,7 +92,7 @@ async function findEmbeddedPayload(directory) {
   for (const entry of await readdir(directory, { withFileTypes: true })) {
     const full = join(directory, entry.name);
     if (entry.isDirectory()) found.push(...await findEmbeddedPayload(full));
-    else if (/\.7z$/i.test(entry.name)) found.push(full);
+    else if (/\.(7z|zip)$/i.test(entry.name)) found.push(full);
   }
   return found;
 }
@@ -105,11 +106,13 @@ function peHeader(bytes) {
   return { machine: bytes.readUInt16LE(offset + 4), signed: bytes.readUInt32LE(certificateDirectory) !== 0 };
 }
 try {
-  extract(artifact, join(root, 'wrapper'));
+  const outerLog = extract(artifact, join(root, 'wrapper'));
+  const wrapperListing = await readdir(join(root, 'wrapper'));
   const embeddedFiles = await findEmbeddedPayload(join(root, 'wrapper'));
-  assert.equal(embeddedFiles.length, 1, `expected exactly one embedded payload, got ${JSON.stringify(embeddedFiles)}`);
+  assert.equal(embeddedFiles.length, 1,
+    `expected exactly one embedded payload, got ${JSON.stringify(embeddedFiles)}; wrapper=${JSON.stringify(wrapperListing.slice(0, 20))}; 7z=${outerLog.slice(-300)}`);
   const embedded = embeddedFiles[0];
-  assert.match(basename(embedded), /^app-64\.7z$/i, `embedded payload is not the x64 application: ${basename(embedded)}`);
+  assert.match(basename(embedded), /^app-64\.(7z|zip)$/i, `embedded payload is not the x64 application: ${basename(embedded)}`);
   assert.equal(/\.exe$/i.test(basename(embedded)), false);
   const wrapperFiles = await readdir(join(root, 'wrapper'), { recursive: true });
   assert.equal(wrapperFiles.some(path => /uninstall/i.test(String(path))), false, 'portable unexpectedly contains an uninstaller');
