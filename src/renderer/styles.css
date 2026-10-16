@@ -80,6 +80,15 @@ button:disabled { cursor: not-allowed; }
 .text-button { background: transparent; color: var(--deep); padding: 4px 6px; }
 .text-button:hover:not(:disabled) { text-decoration: underline; }
 
+/* Reserved strip above the embedded official login page; keeps cancellation reachable. */
+.login-bar {
+  position: fixed; inset: 0 0 auto 0; height: 48px; z-index: 40;
+  display: flex; align-items: center; justify-content: center; gap: 14px;
+  background: var(--deep); color: #f5fff0; font-size: 13px;
+}
+.login-bar .ghost { background: transparent; border-color: #ffffff55; color: #f5fff0; }
+.login-bar .ghost:hover:not(:disabled) { border-color: #ffffffaa; }
+
 .notice { color: var(--muted); font-size: 12px; margin: 20px 0 28px; min-height: 17px; }
 .library { background: rgba(255, 255, 255, .55); border: 1px solid #e7eae4; border-radius: 15px; padding: 20px 22px; }
 .library-head { display: flex; justify-content: space-between; align-items: center; gap: 12px; color: var(--muted); font-size: 12px; margin-bottom: 13px; }

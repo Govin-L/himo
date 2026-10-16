@@ -14,8 +14,9 @@
 - playlist/detail/all 要真实 playListID；自建歌单删除用 playlist/delete，不能用 favorite/delete 的成功码冒充删除完成。
 - playback 顶层 fileURL 是音频，fileInfos 可能是 JSON。auditionTime 不能单独判为30秒试听；完整播放按实际权限、资源和时长验证。
 - 收藏没有已确认的直接总数字段：总数由主进程完整分页后 ID 去重得到，与“已加载 N 首”分开。保留滚动自动加载/失败重试/切页位置；禁止用首屏数量冒充总数或把合成数据截图当本人音乐库。
-- 主进程持有凭据与业务 HTTP；renderer 只用白名单 IPC。远程登录页无 preload/Node/业务 IPC。
+- 主进程持有凭据与业务 HTTP；renderer 只用白名单 IPC。官方登录页嵌在主窗口的 `WebContentsView` 中（不是第二个窗口），仍必须无 preload/Node/业务 IPC，取消只能走 `auth:cancelLogin`；顶部取消条高度与 `LOGIN_VIEW_TOP_INSET` 必须一致。
 - 不关闭 webSecurity/TLS 校验；不抢占系统 hms://；不把研究原型的0600明文文件当正式安全存储。
 - 不创建复杂抽象、插件框架、后端服务、云端令牌代理或移动端工程。
 - 不擅自公开仓库/产物、变更系统代理或删除研究现场。
+- 应用/托盘图标由 `scripts/make-icon.mjs` 从 Lucide（ISC）生成；换图标要重跑脚本并保留 `build/icon.LICENSE.txt` 归属声明。
 - 实现阶段维护简短 `docs/IMPLEMENTATION_STATUS.md`，按真实证据标 pending/in-progress/verified；没有测试的平台不宣称支持已验收。

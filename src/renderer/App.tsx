@@ -38,6 +38,7 @@ export function App() {
   const [settings, setSettings] = useState<AppSettings | null>(null);
   const [message, setMessage] = useState('正在检查登录状态…');
   const [busy, setBusy] = useState(false);
+  const [loginOpen, setLoginOpen] = useState(false);
   const [view, setView] = useState<View>({ name: 'favorites' });
   const [queue, setQueue] = useState<Track[]>([]);
   const [queueReady, setQueueReady] = useState(false);
@@ -499,15 +500,23 @@ export function App() {
   }, [currentTrack?.id, status]);
 
   async function login() {
-    setBusy(true); setMessage('正在准备官方登录…');
-    const result = await window.desktop.auth.login().catch(() => null);
-    if (result?.ok) {
-      resetPersonalState();
-      setStatus(result.data); setView({ name: 'favorites' }); setMessage('登录成功。');
-    }
-    else if (result) setMessage(result.error.message);
-    else setMessage('登录未完成，请检查应用状态后重试。');
-    setBusy(false);
+    setBusy(true); setLoginOpen(true); setMessage('正在准备官方登录…');
+    try {
+      const result = await window.desktop.auth.login().catch(() => null);
+      if (result?.ok) {
+        resetPersonalState();
+        setStatus(result.data); setView({ name: 'favorites' }); setMessage('登录成功。');
+      }
+      else if (result) setMessage(result.error.message);
+      else setMessage('登录未完成，请检查应用状态后重试。');
+    } finally { setLoginOpen(false); setBusy(false); }
+  }
+
+  // The official page runs inside the main window, so cancellation is an explicit app action.
+  async function cancelLogin() {
+    const result = await window.desktop.auth.cancelLogin().catch(() => null);
+    if (result?.ok) setMessage('正在取消登录…');
+    else setMessage(result?.error.message ?? '取消登录失败，请重试。');
   }
 
   function resetPersonalState() {
@@ -617,6 +626,10 @@ export function App() {
         : renderPage()}
       {status?.authenticated && <FavoritesPage key={accountVersion} ctx={ctx} active={view.name === 'favorites'} />}
     </main>
+    {loginOpen && <div className="login-bar" role="status">
+      <span>正在官方页面完成扫码授权，完成后自动返回。</span>
+      <button className="ghost" onClick={() => void cancelLogin()}>取消登录</button>
+    </div>}
     {lyricsOpen && <LyricsPanel doc={lyrics} positionSeconds={position} onClose={() => setLyricsOpen(false)} />}
     {queueOpen && <QueuePanel tracks={queue} currentId={currentTrack?.id ?? null} onSelect={queueIndex => { const at = order.current.indexOf(queueIndex); void playAt(at < 0 ? 0 : at); }} onClose={() => setQueueOpen(false)} />}
     <PlayerBar

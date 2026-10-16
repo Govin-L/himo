@@ -2,6 +2,7 @@ export const channels = {
   authStatus: 'auth:status',
   authLogin: 'auth:login',
   authLogout: 'auth:logout',
+  authCancelLogin: 'auth:cancel-login',
   musicFavorites: 'music:favorites',
   musicFavoritesSummary: 'music:favorites-summary',
   musicPlaylists: 'music:playlists',

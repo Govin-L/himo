@@ -128,9 +128,11 @@ try {
     const record = await app.evaluate(() => globalThis.__loginFixtureRecords.at(-1));
     assert.equal(record.requests.length, 2, 'untrusted destination must be blocked before request');
     assert.equal(record.serviceReached, false);
-    await login.close();
-    await mainWindow.getByRole('status').getByText(/登录窗口已关闭/).waitFor({ timeout: 5000 });
-    console.log(JSON.stringify({ mode, blockedBeforeRequest: true, authenticated: false }));
+    await mainWindow.getByRole('button', { name: '取消登录' }).click();
+    await mainWindow.getByRole('status').getByText(/用户取消登录/).waitFor({ timeout: 5000 });
+    assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1,
+      'cancelling the embedded login must not leave an OS window');
+    console.log(JSON.stringify({ mode, blockedBeforeRequest: true, authenticated: false, extraWindow: false }));
   }
 } finally {
   if (app) await app.close().catch(() => undefined);

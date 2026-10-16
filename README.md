@@ -36,7 +36,8 @@ npm start
 
 | 功能 | 当前实现 / 验证边界 |
 |---|---|
-| 官方扫码、回调、音乐会话 | 真实 Electron 本人扫码通过，读取首批 50 首收藏；登录页无 Node/preload/业务 IPC，取消/错误 state/清理故障回归通过 |
+| 官方扫码、回调、音乐会话 | 真实 Electron 本人扫码通过，读取首批 50 首收藏；官方页嵌在主窗口的 `WebContentsView` 里（不再弹第二个窗口），顶部保留“取消登录”，远程页仍无 Node/preload/业务 IPC；取消/错误 state/清理故障回归通过 |
+| 应用图标 | 由 `scripts/make-icon.mjs` 从开源 Lucide 图标（ISC，Music）生成：512 应用图标 + 32 托盘图标；Windows 包内图标已按像素校验（品牌底色/字形覆盖率），Linux AppImage 内图标与源文件逐字节一致 |
 | 收藏列表 | 每页 50 首，滚动接近底部自动加载，失败保留内容并可重试；切页保留数据和位置 |
 | 收藏总数 | 接口没有已确认的直接总数字段，主进程后台分页到末页后按 ID 去重；总数与“已加载 N 首”分开，失败不显示假总数；计数/显示共用页索引，不重复请求 |
 | 播放全部 | 先补齐分页，准备中可取消；不再把当前一页叫“全部”；965 首合成库队列与磁盘保存完整验证通过 |
@@ -57,6 +58,7 @@ npm start
 
 ```sh
 npm test                         # 140 项离线协议/业务/状态测试
+node_modules/.bin/electron --no-sandbox scripts/make-icon.mjs   # 需要时重生成图标（Xvfb 下：xvfb-run -a）
 npm run typecheck
 npm run build
 npm run test:electron             # 真实 Electron 边界、本地音频/seek/ended、代理路由
@@ -118,6 +120,8 @@ node scripts/release-checksums.mjs release/win-x64-portable
 - MP3/FLAC 协议研究样本曾完整 FFmpeg 解码，但不能替代 Electron 真实 CDN 的 metadata/seek/ended 与设备听播。
 - 每日推荐不做。歌单只提供已验证的简介修改，不提供改名/封面/曲目编辑的空按钮。
 - 不做下载/解密/特殊音质/Hi-Res 承诺/自动更新。
+- 登录页在主窗口内，取消按钮固定在顶部 48px 条；该条高度与应用内登录视图的预留位置是同一个常量（`LOGIN_VIEW_TOP_INSET`），改动样式时需同步。
+- 应用图标为 Lucide 衍生作品，其 ISC 许可与版权声明见 `build/icon.LICENSE.txt`。
 - 播放历史上报的接口形态来自公开 H5 资源，尚未用真实账号验证；若服务端拒绝，只会静默失败，不重试、不改变播放行为。
 - 当前 OAuth client_id 来自公开兼容性研究，不是本项目自有注册身份；公开分发前仍需身份、授权和条款评估。
 

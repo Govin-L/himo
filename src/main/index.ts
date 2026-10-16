@@ -7,6 +7,7 @@ import { createAuthManagerLifecycle } from './auth-manager-lifecycle.mjs';
 import { applyNodeProxy, electronBypassRules, proxyConfigurationProblem, proxyRules, readProxySettings } from './proxy.mjs';
 import { shouldBlockMediaRequest } from '../safe-media-url.mjs';
 import { loadSettings } from './storage';
+import { TRAY_ICON_PNG_BASE64 } from './icons';
 import type { AppSettings } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
@@ -16,7 +17,9 @@ let closeBehavior: AppSettings['closeBehavior'] = 'quit';
 const rendererUrl = pathToFileURL(join(__dirname, '../renderer/index.html')).href;
 const authManagerLifecycle = createAuthManagerLifecycle(async () => {
   const auth = new AuthManager(message => mainWindow?.webContents.send('auth:progress', message),
-    () => session.defaultSession.clearStorageData({ storages: ['localstorage', 'indexdb', 'cachestorage'] }));
+    () => session.defaultSession.clearStorageData({ storages: ['localstorage', 'indexdb', 'cachestorage'] }),
+    // The official login page is embedded in the main window, so the window must outlive the flow.
+    () => (mainWindow && !mainWindow.isDestroyed() ? mainWindow : null));
   await auth.restore();
   return auth;
 });
@@ -77,9 +80,7 @@ function showMainWindow(): void {
 
 function createTray(): void {
   try {
-    const image = nativeImage.createFromDataURL(
-      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAABAAAAAQCAYAAAAf8/9hAAAANklEQVR4nGOQdjD/TwlmGDUAvwGXPxyHY5INQNaMzxCsBmDTjMuQQWoAxWFAlVgYHAmJLgYAAMIh2eges60SAAAAAElFTkSuQmCC',
-    );
+    const image = nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_ICON_PNG_BASE64}`);
     tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
     tray.setToolTip('华为音乐');
     tray.setContextMenu(Menu.buildFromTemplate([

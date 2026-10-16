@@ -45,9 +45,10 @@ try {
         if (rows.length < 100 && JSON.stringify(rows.at(-1)) !== JSON.stringify(entry)) rows.push(entry);
       } catch { /* Do not log malformed targets. */ }
     };
-    app.on('browser-window-created', (_event, window) => {
-      const contents = window.webContents;
-      if (contents.getLastWebPreferences().preload) return;
+    // The official page now lives in a WebContentsView inside the main window, so watch
+    // web-contents-created instead of browser-window-created.
+    app.on('web-contents-created', (_event, contents) => {
+      if (contents.getLastWebPreferences?.().preload) return;
       for (const event of ['will-navigate', 'will-redirect', 'did-navigate']) {
         contents.on(event, (_event, url) => record(event, url));
       }
@@ -56,14 +57,17 @@ try {
       });
     });
   });
-  app.on('window', page => {
-    if (page === mainWindow) return;
-    loginWindow = page;
-    page.on('response', response => {
+  // Playwright exposes the embedded view as a page; resolve it by URL and hook the QR response once.
+  function attachLoginPage() {
+    const candidate = app.windows().find(page => page !== mainWindow);
+    if (!candidate || candidate === loginWindow) return loginWindow;
+    loginWindow = candidate;
+    candidate.on('response', response => {
       const url = new URL(response.url());
       if (url.hostname === 'id1.cloud.huawei.com' && url.pathname === '/DimensionalCode/getqrInfo' && response.ok()) qrReceived = true;
     });
-  });
+    return loginWindow;
+  }
   stage = 'open-official-login';
   await mainWindow.getByRole('button', { name: '扫码登录' }).click();
   console.log('请在华为官方页面扫码确认；服务器模式下等待 QR_READY 图片。本轮会验证真实回调、音乐会话和收藏读取，不修改音乐库。');
@@ -71,6 +75,7 @@ try {
   let complete = false;
   while (!complete && Date.now() < deadline && !interrupted) {
     await mainWindow.waitForTimeout(500);
+    attachLoginPage();
     if (process.argv.includes('--qr') && qrReceived && !qrWritten && loginWindow && !loginWindow.isClosed()) {
       const url = new URL(loginWindow.url());
       if (url.hostname === 'id1.cloud.huawei.com' && url.pathname === '/CAS/portal/loginAuth.html') {

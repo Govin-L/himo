@@ -1,5 +1,5 @@
 import { randomBytes } from 'node:crypto';
-import { session as electronSession } from 'electron';
+import { session as electronSession, WebContentsView } from 'electron';
 import { electronBypassRules, proxyRules, readProxySettings } from './proxy.mjs';
 import { createAttempt, exchangeCode, exchangeMusicSession, isAllowedLoginUrl, isCallback } from '../auth.mjs';
 import { MusicClient } from '../music.mjs';
@@ -32,13 +32,27 @@ export function tracksFromFavorites(response: any): Track[] {
   return tracksFrom(response?.favoriteInfos) as Track[];
 }
 
-export async function openLogin(onProgress: (message: string) => void): Promise<Session> {
-  const { BrowserWindow } = await import('electron');
+// The official page is hosted in a WebContentsView inside the main window instead of a second OS
+// window. Isolation is unchanged: no preload, no Node, its own temporary partition. The top strip
+// stays with the app so the user always has a visible way to cancel.
+export const LOGIN_VIEW_TOP_INSET = 48;
+
+export type LoginHost = {
+  parent: Electron.BrowserWindow;
+  onCancelReady?: (cancel: () => void) => void;
+};
+
+export async function openLogin(options: { onProgress: (message: string) => void; host: LoginHost }): Promise<Session> {
+  const onProgress = options.onProgress;
+  const parent = options.host.parent;
+  if (!parent || parent.isDestroyed()) throw new Error('应用窗口不可用，无法开始登录');
   const attempt = createAttempt();
   const partition = `login-${randomBytes(18).toString('hex')}`;
   const proxy = readProxySettings();
   let loginSession: Electron.Session | undefined;
-  let loginWindow: Electron.BrowserWindow | undefined;
+  let loginView: Electron.WebContentsView | undefined;
+  let viewAttached = false;
+  let applyBounds: () => void = () => undefined;
   let loginContents: Electron.WebContents | undefined;
   let loginCallback: ReturnType<typeof createLoginCallback> | undefined;
   let timer: NodeJS.Timeout | undefined;
@@ -57,14 +71,18 @@ export async function openLogin(onProgress: (message: string) => void): Promise<
   try {
     const activeSession = electronSession.fromPartition(partition);
     loginSession = activeSession;
-    const activeWindow = new BrowserWindow({
-      show: false,
-      width: 460, height: 720, minWidth: 400, minHeight: 600, title: '登录华为音乐',
+    // Same hardened webPreferences as before, now inside the main window's view tree.
+    const activeView = new WebContentsView({
       webPreferences: { partition, nodeIntegration: false, contextIsolation: true, sandbox: true, webSecurity: true },
     });
-    loginWindow = activeWindow;
-    const activeContents = activeWindow.webContents;
+    loginView = activeView;
+    const activeContents = activeView.webContents;
     loginContents = activeContents;
+    applyBounds = () => {
+      if (parent.isDestroyed() || activeContents.isDestroyed()) return;
+      const { width, height } = parent.getContentBounds();
+      activeView.setBounds({ x: 0, y: LOGIN_VIEW_TOP_INSET, width, height: Math.max(0, height - LOGIN_VIEW_TOP_INSET) });
+    };
     inspectNavigation = (_event: Electron.Event, url: string) => {
       if (!isCallback(url, attempt)) return;
       _event.preventDefault(); loginCallback?.accept(url);
@@ -93,7 +111,10 @@ export async function openLogin(onProgress: (message: string) => void): Promise<
       loginWindowClosed = true;
       loginCallback?.reject(new Error('登录窗口已关闭'));
     };
-    activeWindow.on('closed', rejectOnClose);
+    // Closing the app window or resizing it must tear down / reflow the embedded page.
+    parent.once('closed', rejectOnClose);
+    parent.on('resize', applyBounds);
+    options.host.onCancelReady?.(() => loginCallback?.reject(new Error('用户取消登录')));
     timer = setTimeout(() => loginCallback?.reject(new Error('登录等待超时，请重新发起')), 10 * 60_000);
     activeSession.setPermissionRequestHandler(denyPermissionRequest);
     activeSession.setPermissionCheckHandler(denyPermissionCheck);
@@ -107,11 +128,17 @@ export async function openLogin(onProgress: (message: string) => void): Promise<
           throw new Error('无法应用登录网络代理，请检查代理配置后重试。');
         }
       }
-    }, () => activeWindow.show(), async () => {
+    }, () => {
+      // Attach only after the proxy is configured, so the page never loads without it.
+      parent.contentView.addChildView(activeView);
+      viewAttached = true;
+      applyBounds();
+      activeContents.focus();
+    }, async () => {
       onProgress('正在打开华为官方登录页面…');
-      try { await activeWindow.loadURL(attempt.authorizeUrl); }
+      try { await activeContents.loadURL(attempt.authorizeUrl); }
       catch (error) {
-        if (loginWindowClosed || activeWindow.isDestroyed()) throw new Error('登录窗口已关闭');
+        if (loginWindowClosed || activeContents.isDestroyed()) throw new Error('登录窗口已关闭');
         throw error;
       }
     }, loginCallback), loginCallback);
@@ -142,13 +169,15 @@ export async function openLogin(onProgress: (message: string) => void): Promise<
         cleanup(() => contentsToCleanup.off('will-redirect', rejectUnknownNavigation!));
       }
     }
-    if (loginWindow && rejectOnClose) cleanup(() => loginWindow!.off('closed', rejectOnClose!));
+    if (rejectOnClose) cleanup(() => parent.off('closed', rejectOnClose!));
+    cleanup(() => parent.off('resize', applyBounds));
     if (loginSession) {
       cleanup(() => loginSession!.setPermissionRequestHandler(null));
       cleanup(() => loginSession!.setPermissionCheckHandler(null));
       cleanup(() => loginSession!.off('will-download', denyDownload));
     }
-    if (loginWindow && !loginWindow.isDestroyed()) cleanup(() => loginWindow!.close());
+    if (viewAttached && loginView && !parent.isDestroyed()) cleanup(() => parent.contentView.removeChildView(loginView!));
+    if (contentsToCleanup && !contentsToCleanup.isDestroyed()) cleanup(() => contentsToCleanup.close());
     if (loginSession) {
       try {
         await loginSession.clearStorageData();
@@ -156,7 +185,7 @@ export async function openLogin(onProgress: (message: string) => void): Promise<
         throw new Error('无法清理临时登录会话；为保护账号信息，本次登录未完成。');
       }
     }
-    if (cleanupHadError) throw new Error('无法完整关闭临时登录窗口；为保护账号信息，本次登录未完成。');
+    if (cleanupHadError) throw new Error('无法完整关闭登录界面；为保护账号信息，本次登录未完成。');
   }
 }
 

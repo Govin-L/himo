@@ -88,6 +88,7 @@ export type DesktopApi = {
     status(): Promise<Result<AuthStatus>>;
     login(): Promise<Result<AuthStatus>>;
     logout(): Promise<Result<void>>;
+    cancelLogin(): Promise<Result<void>>;
     onProgress(listener: (message: string) => void): () => void;
   };
   music: {

@@ -23,19 +23,29 @@ async function openLoginWindow(mainWindow) {
   await mainWindow.getByRole('status').getByText(/请在官方页面完成扫码和授权/).waitFor({ timeout: 10000 });
   const host = new URL(loginWindow.url()).hostname;
   assert.equal(isAllowedLoginUrl(loginWindow.url()), true, `unexpected login origin: ${host}`);
+  // The whole point of the embedded host: the official page must not create a second OS window.
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1,
+    'login opened an extra OS window');
+  await mainWindow.getByRole('button', { name: '取消登录' }).waitFor({ timeout: 5000 });
   return { loginWindow, host };
 }
 
-async function closeAndCheckCancellation(mainWindow, loginWindow) {
-  await loginWindow.close();
-  await mainWindow.getByRole('status').getByText('登录窗口已关闭', { exact: false }).waitFor({ timeout: 5000 });
-  assert.equal(app.windows().length, 1, 'login window remained after cancellation');
-  assert.equal(await mainWindow.title(), '华为音乐');
-  assert.equal(await mainWindow.getByRole('button', { name: '扫码登录' }).isEnabled(), true);
+async function cancelLogin(mainWindow) {
+  await mainWindow.getByRole('button', { name: '取消登录' }).click();
 }
 
-async function closeAndCheckStorageFailure(mainWindow, loginWindow) {
-  await loginWindow.close();
+async function closeAndCheckCancellation(mainWindow) {
+  await cancelLogin(mainWindow);
+  await mainWindow.getByRole('status').getByText(/用户取消登录/, { exact: false }).waitFor({ timeout: 5000 });
+  assert.equal(app.windows().length, 1, 'embedded login view remained after cancellation');
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1);
+  assert.equal(await mainWindow.title(), '华为音乐');
+  assert.equal(await mainWindow.getByRole('button', { name: '扫码登录' }).isEnabled(), true);
+  assert.equal(await mainWindow.getByRole('button', { name: '取消登录' }).count(), 0, 'cancel bar stayed after cancellation');
+}
+
+async function closeAndCheckStorageFailure(mainWindow) {
+  await cancelLogin(mainWindow);
   await mainWindow.getByRole('status').getByText(/无法清理临时登录会话/, { exact: false }).waitFor({ timeout: 5000 });
   assert.equal(app.windows().length, 1, 'login window remained after storage cleanup failure');
   assert.equal(await mainWindow.getByRole('button', { name: '扫码登录' }).isEnabled(), true);
@@ -44,7 +54,8 @@ async function closeAndCheckStorageFailure(mainWindow, loginWindow) {
 
 async function checkInitializationFailure(mainWindow) {
   await mainWindow.getByRole('status').getByText(/synthetic-handler-install-failure/, { exact: false }).waitFor({ timeout: 5000 });
-  assert.equal(app.windows().length, 1, 'partial login window remained after handler setup failure');
+  assert.equal(app.windows().length, 1, 'partial login view remained after handler setup failure');
+  assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1);
   assert.equal(await mainWindow.getByRole('button', { name: '扫码登录' }).isEnabled(), true);
   assert.equal(await mainWindow.getByRole('button', { name: '退出' }).count(), 0, 'handler setup failure was presented as authenticated');
 }
@@ -116,17 +127,17 @@ try {
   const mainWindow = await app.firstWindow();
   await instrumentLoginSessionCleanup();
   const first = await openLoginWindow(mainWindow);
-  await closeAndCheckCancellation(mainWindow, first.loginWindow);
+  await closeAndCheckCancellation(mainWindow);
   assert.equal(await cleanupCount(), 1, 'first temporary login partition was not cleared');
   const second = await openLoginWindow(mainWindow);
-  await closeAndCheckCancellation(mainWindow, second.loginWindow);
+  await closeAndCheckCancellation(mainWindow);
   assert.equal(await cleanupCount(), 2, 'second temporary login partition was not cleared');
   const third = await openLoginWindow(mainWindow);
   await submitInvalidState(mainWindow, third.loginWindow);
   assert.equal(await cleanupCount(), 3, 'invalid callback partition was not cleared');
   await app.evaluate(() => { globalThis.__failNextLoginSessionCleanup = true; });
   const fourth = await openLoginWindow(mainWindow);
-  await closeAndCheckStorageFailure(mainWindow, fourth.loginWindow);
+  await closeAndCheckStorageFailure(mainWindow);
   assert.equal(await cleanupAttempts(), 4, 'storage cleanup failure was not exercised');
   assert.equal(await cleanupCount(), 3, 'failed storage cleanup was counted as successful');
   await app.evaluate(() => { globalThis.__failNextPermissionCheckHandlerInstall = true; });

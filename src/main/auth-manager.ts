@@ -30,8 +30,10 @@ export class AuthManager {
   private writer: ReturnType<typeof createWriteController> | null = null;
   private catalog: ReturnType<typeof createFavoritesCatalog> | null = null;
   private readonly memory = createMemoryCache({ ttlMs: PLAYLIST_CACHE_TTL_MS });
+  private cancelLoginRef: (() => void) | null = null;
   constructor(private readonly progress: (message: string) => void,
-    private readonly clearRendererData: () => Promise<void> = async () => undefined) {}
+    private readonly clearRendererData: () => Promise<void> = async () => undefined,
+    private readonly loginHost: () => Electron.BrowserWindow | null = () => null) {}
 
   async restore(): Promise<void> {
     this.session = (await loadMusicSession())?.music ?? null;
@@ -47,7 +49,12 @@ export class AuthManager {
     if (this.sessionEpoch.isTransitioning()) return fail({ kind: 'unknown', message: '退出登录正在进行，请稍后重试。', retryable: true });
     if (this.writer?.busy) return fail({ kind: 'unknown', message: '账号写操作正在核对，请稍后重新登录。', retryable: true });
     if (this.loginPromise) return fail({ kind: 'unknown', message: '登录已在进行中。', retryable: false });
-    this.loginPromise = openLogin(this.progress).then(async (session) => {
+    const parent = this.loginHost();
+    if (!parent || parent.isDestroyed()) return fail({ kind: 'unknown', message: '应用窗口不可用，无法开始登录。', retryable: true });
+    this.loginPromise = openLogin({
+      onProgress: this.progress,
+      host: { parent, onCancelReady: cancel => { this.cancelLoginRef = cancel; } },
+    }).then(async (session) => {
       const candidate = { token: session.token, snsUserID: session.snsUserID, expireTime: session.expireTime };
       await favorites(candidate);
       const previous = this.session;
@@ -71,7 +78,13 @@ export class AuthManager {
     });
     try { await this.loginPromise; return this.status(); }
     catch (error) { return fail(errorFrom(error, '登录未完成。')); }
-    finally { this.loginPromise = null; }
+    finally { this.loginPromise = null; this.cancelLoginRef = null; }
+  }
+  // Lets the renderer cancel an in-progress official login without closing the app window.
+  cancelLogin(): Result<void> {
+    if (!this.cancelLoginRef) return fail({ kind: 'invalid', message: '当前没有进行中的登录。', retryable: false });
+    this.cancelLoginRef();
+    return ok(undefined);
   }
   async logout(): Promise<Result<void>> {
     if (this.loginPromise) return fail({ kind: 'unknown', message: '登录正在进行，完成后再退出。', retryable: true });

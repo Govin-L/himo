@@ -7,6 +7,7 @@ const api: DesktopApi = {
     status: () => ipcRenderer.invoke(channels.authStatus),
     login: () => ipcRenderer.invoke(channels.authLogin),
     logout: () => ipcRenderer.invoke(channels.authLogout),
+    cancelLogin: () => ipcRenderer.invoke(channels.authCancelLogin),
     onProgress: listener => {
       const wrapped = (_event: Electron.IpcRendererEvent, message: string) => listener(message);
       ipcRenderer.on('auth:progress', wrapped);

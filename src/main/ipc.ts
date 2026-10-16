@@ -18,6 +18,7 @@ export function registerIpc(
   ipcMain.handle(channels.authStatus, async event => { guard(event); return auth.status(); });
   ipcMain.handle(channels.authLogin, async event => { guard(event); return auth.login(); });
   ipcMain.handle(channels.authLogout, async event => { guard(event); return auth.logout(); });
+  ipcMain.handle(channels.authCancelLogin, async event => { guard(event); return auth.cancelLogin(); });
   ipcMain.handle(channels.musicFavorites, async (event, input: { start?: number; limit?: number; refresh?: boolean } = {}) => {
     guard(event);
     const start = input?.start ?? 0;
