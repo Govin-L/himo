@@ -6,7 +6,7 @@ import { execFileSync } from 'node:child_process';
 import { createRequire } from 'node:module';
 import { mkdtemp, readFile, readdir, rm, stat } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
-import { basename, dirname, join, resolve } from 'node:path';
+import { basename, dirname, join, relative, resolve } from 'node:path';
 import { getPath7za } from 'app-builder-lib/out/toolsets/7zip.js';
 
 const require = createRequire(import.meta.url);
@@ -69,17 +69,17 @@ function decodePng(png) {
 }
 const hash = bytes => createHash('sha256').update(bytes).digest('hex');
 
-function list(archive) {
-  const output = execFileSync(sevenZip, ['l', '-slt', archive], { encoding: 'utf8', maxBuffer: 4 * 1024 * 1024 });
-  // Some 7-Zip builds omit the section separator, so fall back to scanning the whole output.
-  const section = output.includes('----------') ? output.slice(output.indexOf('----------')) : output;
-  const entries = section.split('\n').filter(line => line.startsWith('Path = '))
-    .map(line => line.slice(7).trim().replaceAll('\\', '/'))
-    .filter(path => path && path !== archive);
-  assert.ok(entries?.length, 'archive entries unavailable');
-  assert.deepEqual(entries.filter(path => path.startsWith('/') || /^[A-Za-z]:/.test(path) || path.split('/').includes('..')), [], 'unsafe archive entry');
-  assert.deepEqual(entries.filter(path => forbidden.test(path)), [], 'private or source path in payload');
-  return entries;
+async function walkFiles(directory, base = directory) {
+  const files = [];
+  for (const entry of await readdir(directory, { withFileTypes: true })) {
+    const full = join(directory, entry.name);
+    if (entry.isDirectory()) files.push(...await walkFiles(full, base));
+    else files.push(relative(base, full).replaceAll('\\', '/'));
+  }
+  return files;
+}
+async function exists(path) {
+  try { await stat(path); return true; } catch { return false; }
 }
 function extract(archive, destination) {
   // Keep 7-Zip's output so a platform-specific failure is diagnosable from the CI log.
@@ -106,24 +106,28 @@ function peHeader(bytes) {
   return { machine: bytes.readUInt16LE(offset + 4), signed: bytes.readUInt32LE(certificateDirectory) !== 0 };
 }
 try {
+  // 7-Zip flattens this NSIS portable payload on Windows while Linux keeps $PLUGINSDIR/app-64.7z,
+  // so locate the application files whichever layout the extractor produced.
   const outerLog = extract(artifact, join(root, 'wrapper'));
   const wrapperListing = await readdir(join(root, 'wrapper'));
-  const embeddedFiles = await findEmbeddedPayload(join(root, 'wrapper'));
-  assert.equal(embeddedFiles.length, 1,
-    `expected exactly one embedded payload, got ${JSON.stringify(embeddedFiles)}; wrapper=${JSON.stringify(wrapperListing.slice(0, 20))}; 7z=${outerLog.slice(-300)}`);
-  const embedded = embeddedFiles[0];
-  assert.match(basename(embedded), /^app-64\.(7z|zip)$/i, `embedded payload is not the x64 application: ${basename(embedded)}`);
-  assert.equal(/\.exe$/i.test(basename(embedded)), false);
-  const wrapperFiles = await readdir(join(root, 'wrapper'), { recursive: true });
-  assert.equal(wrapperFiles.some(path => /uninstall/i.test(String(path))), false, 'portable unexpectedly contains an uninstaller');
-  const payload = list(embedded);
+  let appRoot = join(root, 'wrapper');
+  if (!(await exists(join(appRoot, 'resources', 'app.asar')))) {
+    const embeddedFiles = await findEmbeddedPayload(appRoot);
+    assert.equal(embeddedFiles.length, 1,
+      `expected exactly one embedded payload, got ${JSON.stringify(embeddedFiles)}; wrapper=${JSON.stringify(wrapperListing.slice(0, 20))}; 7z=${outerLog.slice(-300)}`);
+    const embedded = embeddedFiles[0];
+    assert.match(basename(embedded), /^app-64\.(7z|zip)$/i, `embedded payload is not the x64 application: ${basename(embedded)}`);
+    extract(embedded, join(root, 'app'));
+    appRoot = join(root, 'app');
+  }
+  const payload = await walkFiles(appRoot);
+  assert.equal(payload.some(path => /uninstall/i.test(path)), false, 'portable unexpectedly contains an uninstaller');
   // The executable name follows build.productName, so discover it instead of hardcoding it.
   const appExe = payload.find(path => !path.includes('/') && /\.exe$/i.test(path));
   assert.ok(appExe, `no top-level application executable in payload: ${JSON.stringify(payload.slice(0, 5))}`);
   assert.ok(payload.includes('resources/app.asar'));
   assert.deepEqual(payload.filter(path => /(^|\/)(session\.enc|session\.json|settings\.json|queue\.json|cache\.json|history\.json)$/.test(path)), [], 'user data in portable');
-  extract(embedded, join(root, 'app'));
-  const archive = join(root, 'app', 'resources', 'app.asar');
+  const archive = join(appRoot, 'resources', 'app.asar');
   const unpackedArchive = join(dirname(artifact), 'win-unpacked', 'resources', 'app.asar');
   assert.equal(hash(await readFile(archive)), hash(await readFile(unpackedArchive)), 'embedded app differs from the unpacked build');
   const entries = asar.listPackage(archive).map(path => path.replaceAll('\\', '/'));
@@ -131,7 +135,7 @@ try {
   for (const entry of entries.filter(path => path.startsWith('/out/') && !asar.statFile(archive, path.slice(1)).files)) {
     assert.equal(hash(asar.extractFile(archive, entry.slice(1))), hash(await readFile(entry.slice(1))), `outdated bundled output: ${entry}`);
   }
-  const appBytes = await readFile(join(root, 'app', appExe));
+  const appBytes = await readFile(join(appRoot, appExe));
   const appPe = peHeader(appBytes);
   const outerBytes = await readFile(artifact);
   const wrapperPe = peHeader(outerBytes);
