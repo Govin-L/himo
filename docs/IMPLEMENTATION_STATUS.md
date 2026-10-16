@@ -14,7 +14,13 @@
 | M5 视觉与系统集成 | in-progress | Linux Electron 实际截图覆盖 1180×760、960×640、歌词/队列互斥、固定播放器/侧栏。中文字体测试缓存隔离修复，不修改系统。托盘/关闭/媒体键有代码，物理媒体键、无托盘桌面及睡眠恢复仍待验。四方向样机已提供，**用户尚未选择，不宣称视觉定稿**。 |
 | M6 发行工程 | in-progress | Linux x64 AppImage 已构建；从实际 AppImage 提取二进制并启动隔离 profile，核对打包文件与当前 out 一致、renderer 无 Node、设置可保存，全部通过。Windows x64 单文件 portable EXE 已按后续用户要求在 Linux 交叉打包成功（99,522,256 字节，未用 Wine）；静态拆包确认内嵌 x64、无私有目录/源码、与当前 out 一致。启动速度/Windows 登录恢复/媒体仍未验收。原生 NSIS 安装包与 macOS arm64/x64 DMG 入口保留；不把历史失败的 NSIS 中间产物当安装包。deb 等待真实主页/维护者身份，不编造。 |
 
-## 本轮完成（第三批：登录内嵌窗口 / 自绘图标）
+## 本轮完成（第四批：去掉默认菜单 / 改名学习版）
+
+- 移除 Electron 默认菜单：Windows/Linux `Menu.setApplicationMenu(null)`，窗口 `autoHideMenuBar`；macOS 仅保留 appMenu/editMenu/windowMenu 最小角色，Cmd+Q 等仍可用。smoke 回归新增断言：应用菜单为 null 且窗口菜单栏不可见。
+- 改名为“华为音乐第三方客户端（学习版）”：显示名集中在 `src/shared/app-name.mjs`（窗口标题、侧栏、设置页、托盘 tooltip），`build.productName` 同步改为该名称，exe 显示名与 Linux desktop `Name` 一致；`package.json` 的 `name` 与 `appId` 未改，因此 userData 目录和已存设置/登录数据不迁移、不丢失。
+- 回归：140 项单测、smoke（含菜单断言）、UI、业务、965 首、cancel/callback/navigation 均通过；Windows 包静态校验通过（应用 exe 改为动态发现，图标像素校验仍通过）；重命名后 Linux 包含新名称与图标。
+
+## 第三批完成（登录内嵌窗口 / 自绘图标）
 
 - 登录宿主由独立 `BrowserWindow` 改为主窗口内的 `WebContentsView`：远程页依旧无 preload、无 Node、独立临时 partition，权限/下载全拒；顶部保留 48px 取消条（`LOGIN_VIEW_TOP_INSET`），新增 `auth:cancelLogin` 白名单 IPC；窗口 resize 会重排视图，窗口关闭/取消/清理失败仍 fail-closed。
 - 回归更新：取消用例改为点应用内“取消登录”，并断言全程 `BrowserWindow.getAllWindows().length === 1`；回调用例同步；live 工具改从 `web-contents-created` 取脱敏导航轨迹、按 URL 解析内嵌页。

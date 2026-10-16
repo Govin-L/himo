@@ -5,6 +5,7 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as playwright } from 'playwright-core';
 import { isAllowedLoginUrl } from '../src/auth.mjs';
+import { APP_DISPLAY_NAME } from '../src/shared/app-name.mjs';
 
 const userData = await mkdtemp(join(tmpdir(), 'huawei-login-cancel-'));
 let app;
@@ -39,7 +40,7 @@ async function closeAndCheckCancellation(mainWindow) {
   await mainWindow.getByRole('status').getByText(/用户取消登录/, { exact: false }).waitFor({ timeout: 5000 });
   assert.equal(app.windows().length, 1, 'embedded login view remained after cancellation');
   assert.equal(await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows().length), 1);
-  assert.equal(await mainWindow.title(), '华为音乐');
+  assert.equal(await mainWindow.title(), APP_DISPLAY_NAME);
   assert.equal(await mainWindow.getByRole('button', { name: '扫码登录' }).isEnabled(), true);
   assert.equal(await mainWindow.getByRole('button', { name: '取消登录' }).count(), 0, 'cancel bar stayed after cancellation');
 }

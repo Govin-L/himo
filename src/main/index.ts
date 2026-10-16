@@ -8,6 +8,7 @@ import { applyNodeProxy, electronBypassRules, proxyConfigurationProblem, proxyRu
 import { shouldBlockMediaRequest } from '../safe-media-url.mjs';
 import { loadSettings } from './storage';
 import { TRAY_ICON_PNG_BASE64 } from './icons';
+import { APP_DISPLAY_NAME } from '../shared/app-name.mjs';
 import type { AppSettings } from '../shared/types';
 
 let mainWindow: BrowserWindow | null = null;
@@ -30,7 +31,9 @@ if (!hasSingleInstance) app.quit();
 async function createWindow(): Promise<void> {
   const window = new BrowserWindow({
     width: 1180, height: 760, minWidth: 960, minHeight: 640,
-    title: '华为音乐',
+    title: APP_DISPLAY_NAME,
+    // No in-window menu bar on Windows/Linux; the menu is removed below.
+    autoHideMenuBar: true,
     webPreferences: {
       preload: join(__dirname, '../preload/index.cjs'),
       contextIsolation: true, nodeIntegration: false, sandbox: true, webSecurity: true,
@@ -82,7 +85,7 @@ function createTray(): void {
   try {
     const image = nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_ICON_PNG_BASE64}`);
     tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
-    tray.setToolTip('华为音乐');
+    tray.setToolTip(APP_DISPLAY_NAME);
     tray.setContextMenu(Menu.buildFromTemplate([
       { label: '显示窗口', click: showMainWindow },
       { type: 'separator' },
@@ -97,6 +100,17 @@ function createTray(): void {
     // Some Linux desktops have no tray host; keep the normal window/quit behaviour.
     tray = null;
   }
+}
+
+// The default Electron menu (File/Edit/View/Window) is not this app's UI. Windows/Linux get no
+// menu bar at all; macOS keeps only the minimal standard roles so Cmd+Q / copy / paste still work.
+function configureApplicationMenu(): void {
+  if (process.platform !== 'darwin') { Menu.setApplicationMenu(null); return; }
+  Menu.setApplicationMenu(Menu.buildFromTemplate([
+    { role: 'appMenu' },
+    { role: 'editMenu' },
+    { role: 'windowMenu' },
+  ]));
 }
 
 function registerMediaKeys(): void {
@@ -141,6 +155,7 @@ app.whenReady().then(() => {
   const proxy = readProxySettings();
   applyNodeProxy(proxy);
   const settingsReady = loadSettings().then(settings => { closeBehavior = settings.closeBehavior; });
+  configureApplicationMenu();
   createTray();
   registerMediaKeys();
   session.defaultSession.webRequest.onBeforeRequest({ urls: ['<all_urls>'] }, (details, callback) => {

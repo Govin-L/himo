@@ -6,6 +6,7 @@ import {
   SettingsPage, type LibraryContext,
 } from './pages';
 import { FavoritesPage } from './favorites-page';
+import { APP_BRAND_LABEL } from '../shared/app-name.mjs';
 import {
   autosaveDelay, buildShuffleOrder, historyReportDecision, onEndedAction, popPlayHistory, pushPlayHistory, stepCursor,
 } from './player.mjs';
@@ -596,7 +597,7 @@ export function App() {
   const panelOpen = lyricsOpen || queueOpen;
   return <div className={`app-shell ${panelOpen ? 'has-panel' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark"><Headphones size={19} /></span><span>华为音乐</span></div>
+      <div className="brand"><span className="brand-mark"><Headphones size={19} /></span><span>{APP_BRAND_LABEL}</span></div>
       <div className="nav-label">音乐库</div>
       {navItems.map(item => <button key={item.key}
         className={`nav-item ${view.name === item.key || (item.key === 'playlists' && view.name === 'playlist') ? 'active' : ''}`}

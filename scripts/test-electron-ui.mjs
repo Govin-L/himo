@@ -7,6 +7,7 @@ import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as playwright } from 'playwright-core';
+import { APP_DISPLAY_NAME } from '../src/shared/app-name.mjs';
 
 process.umask(0o077);
 const profile = await mkdtemp(join(tmpdir(), 'huawei-ui-profile-'));
@@ -120,7 +121,7 @@ try {
   await page.waitForTimeout(1500);
 
   assert.match(await page.locator('body').innerText(), /连接你的音乐库/);
-  assert.equal(await page.title(), '华为音乐');
+  assert.equal(await page.title(), APP_DISPLAY_NAME);
   assert.equal(await page.getByRole('button', { name: '播放', exact: true }).isDisabled(), true, 'empty queue should disable playback');
   const boundary = await page.evaluate(() => ({
     apiKeys: Object.keys(window.desktop ?? {}).sort(),

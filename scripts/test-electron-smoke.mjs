@@ -8,6 +8,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { _electron as playwright } from 'playwright-core';
 import { createAttempt, consumeCallback, isCallback } from '../src/auth.mjs';
+import { APP_DISPLAY_NAME } from '../src/shared/app-name.mjs';
 
 const profileDir = await mkdtemp(join(tmpdir(), 'music-electron-profile-'));
 const mediaDir = await mkdtemp(join(tmpdir(), 'music-electron-audio-'));
@@ -94,7 +95,7 @@ try {
   await window.waitForTimeout(2500);
   const snapshot = await window.locator('body').innerText();
   assert.match(snapshot, /连接你的音乐库|请登录以读取个人音乐库/, JSON.stringify({ snapshot, failures }));
-  assert.equal(await window.title(), '华为音乐');
+  assert.equal(await window.title(), APP_DISPLAY_NAME);
   assert.equal(await window.getByRole('status').getAttribute('aria-live'), 'polite');
   assert.equal(await window.getByRole('slider', { name: '播放进度' }).count(), 1);
   assert.equal(await window.getByRole('slider', { name: '音量' }).count(), 1);
@@ -126,6 +127,12 @@ try {
   assert.equal(boundary.hasGenericInvoke, false, 'preload exposed a generic IPC entry point');
   assert.equal(boundary.nodeProcess, 'undefined');
   assert.equal(boundary.requireType, 'undefined');
+  // The default Electron menu (File/Edit/View/Window) must not appear in the product UI.
+  const menuState = await app.evaluate(({ Menu, BrowserWindow }) => ({
+    applicationMenuRemoved: Menu.getApplicationMenu() === null,
+    menuBarVisible: BrowserWindow.getAllWindows()[0].isMenuBarVisible(),
+  }));
+  assert.deepEqual(menuState, { applicationMenuRemoved: true, menuBarVisible: false }, JSON.stringify(menuState));
   const rendererOrigin = new URL(await window.url()).protocol;
   assert.equal(rendererOrigin, 'file:');
   const trustedUrl = await window.url();

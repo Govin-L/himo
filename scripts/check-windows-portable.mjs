@@ -96,7 +96,9 @@ try {
   extract(artifact, join(root, 'wrapper'));
   const embedded = join(root, 'wrapper', '$PLUGINSDIR', 'app-64.7z');
   const payload = list(embedded);
-  assert.ok(payload.includes('Huawei Music Desktop.exe'));
+  // The executable name follows build.productName, so discover it instead of hardcoding it.
+  const appExe = payload.find(path => !path.includes('/') && /\.exe$/i.test(path));
+  assert.ok(appExe, `no top-level application executable in payload: ${JSON.stringify(payload.slice(0, 5))}`);
   assert.ok(payload.includes('resources/app.asar'));
   assert.deepEqual(payload.filter(path => /(^|\/)(session\.enc|session\.json|settings\.json|queue\.json|cache\.json|history\.json)$/.test(path)), [], 'user data in portable');
   extract(embedded, join(root, 'app'));
@@ -108,7 +110,7 @@ try {
   for (const entry of entries.filter(path => path.startsWith('/out/') && !asar.statFile(archive, path.slice(1)).files)) {
     assert.equal(hash(asar.extractFile(archive, entry.slice(1))), hash(await readFile(entry.slice(1))), `outdated bundled output: ${entry}`);
   }
-  const appBytes = await readFile(join(root, 'app', 'Huawei Music Desktop.exe'));
+  const appBytes = await readFile(join(root, 'app', appExe));
   const appPe = peHeader(appBytes);
   const outerBytes = await readFile(artifact);
   const wrapperPe = peHeader(outerBytes);
@@ -143,7 +145,7 @@ try {
   assert.equal(appPe.signed, false, 'expected an explicitly unsigned internal build');
   assert.equal(wrapperPe.signed, false);
   assert.ok(appBytes.includes(Buffer.from('asInvoker')), 'application execution manifest must not request elevation');
-  console.log(JSON.stringify({ artifact: basename(artifact), bytes: (await stat(artifact)).size,
+  console.log(JSON.stringify({ artifact: basename(artifact), applicationExecutable: appExe, bytes: (await stat(artifact)).size,
     sha256: hash(outerBytes), singleFileWithEmbeddedApp: true, appArchitecture: 'x64',
     wrapperArchitecture: wrapperPe.machine === 0x14c ? 'x86 NSIS launcher (starts x64 app)' : 'other',
     unsigned: true, noPrivateDataOrSources: true, matchesCurrentBuild: true,

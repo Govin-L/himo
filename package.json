@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
-  "description": "华为音乐独立桌面客户端",
+  "description": "华为音乐第三方客户端（学习版）· 非官方，仅供学习研究",
   "desktopName": "huawei-music-desktop.desktop",
   "author": {
     "name": "Huawei Music Desktop (unofficial internal build)"
@@ -59,7 +59,7 @@
   },
   "build": {
     "appId": "org.hwmusicdesktop.unofficial.internal",
-    "productName": "Huawei Music Desktop",
+    "productName": "华为音乐第三方客户端（学习版）",
     "asar": true,
     "npmRebuild": false,
     "publish": null,
@@ -100,8 +100,15 @@
     "linux": {
       "target": [{ "target": "AppImage", "arch": ["x64"] }],
       "syncDesktopName": true,
+      "executableName": "huawei-music-desktop",
       "category": "AudioVideo;Audio;Music",
-      "synopsis": "Unofficial Huawei Music desktop client (internal test)"
+      "synopsis": "Unofficial third-party Huawei Music client (study build)",
+      "desktop": {
+        "entry": {
+          "Name": "华为音乐第三方客户端（学习版）",
+          "Comment": "非官方第三方客户端，仅供学习研究，未获华为授权"
+        }
+      }
     }
   },
   "dependencies": {

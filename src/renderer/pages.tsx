@@ -3,6 +3,7 @@ import { Search as SearchIcon, Trash2 } from 'lucide-react';
 import { PlaylistGrid, TrackTable, type TrackActions } from './components';
 import { mergeFavoritesPage } from './favorites-pagination.mjs';
 import type { AlbumDetail, ArtistDetail, AppSettings, Playlist, Result, SavedQueue, Track } from '../shared/types';
+import { APP_DISPLAY_NAME } from '../shared/app-name.mjs';
 
 export type LibraryContext = TrackActions & {
   busy: boolean;
@@ -316,7 +317,7 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
       </label>
       <p className="hint">开启后，实际听到一定时长才会上报；快速跳过的曲目不记入华为历史，也不上报播放器未真实播放的秒数。接口形态来自公开 H5 资源，尚未用真实账号验证，失败不影响播放。</p>
       <button className="ghost danger" onClick={() => void window.desktop.app.quit()}>退出程序</button>
-      <p className="hint">当前版本 {__APP_VERSION__}（第三方内部测试构建）。凭证由系统安全存储保存；系统安全存储不可用时退出后需重新登录。首版不提供自动更新。</p>
+      <p className="hint">当前版本 {__APP_VERSION__} · {APP_DISPLAY_NAME}。本项目与华为无隶属或合作关系，未获官方授权，仅供学习研究。凭证由系统安全存储保存；系统安全存储不可用时退出后需重新登录。首版不提供自动更新。</p>
     </div>
   </section>;
 }
