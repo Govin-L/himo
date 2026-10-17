@@ -139,7 +139,7 @@ node scripts/release-checksums.mjs release/<dir>   # 生成 SHA256SUMS（不自�
 
 - 步骤：`npm ci` → 单元测试 → `dist:win:portable` → 静态校验 → `SHA256SUMS`。
 - 触发：仅在 Actions 页面手动运行（可勾选 `smoke`），或推送 `v*` 标签；不随 push 自动执行。
-- **不创建 GitHub Release、不发布安装包。** 工作流只做构建与校验；手动运行时会额外保留一份短期 Actions artifact（3 天）供维护者核对输出——artifact 需要登录 GitHub 才能下载，也不作为分发渠道。
+- **产物发布到 GitHub Release**：手动运行（`release` 默认勾选）或推送 `v*` 标签时，会把 exe 与 `SHA256SUMS` 附到对应标签的 Release（标签不存在则按 `package.json` 版本创建；标签与版本不一致直接失败）。发布说明会写明未签名、非官方、OAuth 身份不属于本项目等事项。不发 Release 的运行才回退到 Actions artifact（3 天）。
 - 可选的 `smoke` 会在 Windows 上额外跑一次 Electron 烟测（步骤内 `choco install ffmpeg` 造音频夹具）；它失败不阻断构建，但会在日志中报错。
 - Fork 后可直接复用，无需任何密钥（工作流只申请 `contents: read`）。
 - 本项目**不会**自动上传到对象存储或任何第三方分发渠道；需要二进制请按上一节在本地自行构建。
