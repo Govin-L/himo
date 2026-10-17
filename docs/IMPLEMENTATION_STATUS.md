@@ -17,6 +17,8 @@
 ## CI：GitHub Actions 原生 Windows 打包（已跑通）
 
 - 仓库镜像到 GitHub 私有仓库（`talongao/huawei-music-desktop`），新增 `.github/workflows/windows-portable.yml`：手动或 `v*` 标签触发，windows-latest 上执行 `npm ci` → 单元测试 → `dist:win:portable` → 静态校验 → SHA256SUMS → artifact（保留 7 天），不自动发布、不上传 OSS。
+- 产物发布：手动运行或 `v*` 标签会创建/更新对应标签的 GitHub Release（exe + SHA256SUMS），不自动传 OSS；标签与 `package.json` 版本不一致会失败。
+- 可选 Windows 烟测需要 ffmpeg，runner 不自带，已在步骤内 `choco install ffmpeg`；该步骤失败不阻断任务（此前失败即为缺少 ffmpeg，非应用缺陷）。
 - 首次运行验证：run 38936061865 全绿，产物 100,141,218 字节，`SHA256 6d8c829c1613f46da6c01abb04699e7fe8a0001bbfe2de46424d3373dc7b774e`，应用 exe 名称为“华为音乐第三方客户端（学习版）.exe”，图标像素校验通过。
 - 为让校验适配 Windows，静态检查改为：解包定位（不解析 7-Zip 清单文本）、兼容展平布局、asar 解包后按文件比对（不再依赖 asar 条目分隔符）。这些修复保留了 Linux 侧原有的 payload 名与 PE 架构断言。
 - 原生 Windows 构建与本地 Linux 交叉构建字节不同，两者均通过同一套静态校验；**Windows 启动/播放仍未验收**。

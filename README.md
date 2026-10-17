@@ -119,8 +119,9 @@ node scripts/release-checksums.mjs release/win-x64-portable
 `.github/workflows/windows-portable.yml` 在 **windows-latest** 上自动：`npm ci` → 单元测试 → `dist:win:portable` → 静态校验（内嵌 x64、无私人目录、图标像素、与当前构建一致）→ 生成 SHA256SUMS → 上传 artifact。
 
 - 触发：Actions 页手动 `Run workflow`，或推送 `v*` 标签；默认**不在每次 push 时构建**，因为私有仓库免费额度为每月 2000 分钟、Windows runner 按 2 倍计费（一次约 10–20 计费分钟）。
-- 手动触发时可勾选 `smoke`，额外在 Windows 上跑一次 Electron 烟测（失败不阻断产物）。
-- 产物仅上传到 Actions artifact（保留 7 天，私有仓库存储有限），**不自动发布 Release、不自动上传 OSS**；下载后请核对 SHA256SUMS。
+- 手动触发时可勾选 `smoke`，额外在 Windows 上跑一次 Electron 烟测（会先 `choco install ffmpeg`，因为 runner 不自带；该步骤失败不阻断产物，但会在日志里报错）。
+- **产物进 GitHub Release**：手动运行（默认勾选 `release`）或推送 `v*` 标签时，会把 exe 与 `SHA256SUMS` 上传到对应标签的 Release（标签不存在则按 `package.json` 版本创建，且标签与版本不一致会直接报错）；只有不发包的运行才回退到 Actions artifact（保留 7 天）。
+- **仍不自动上传 OSS、不自动公开仓库**；私有仓库的 Release 仅协作者可见。下载后请核对 SHA256SUMS。
 - 已在 GitHub 的 windows-latest 上真实跑通（[run 38936061865](https://github.com/talongao/huawei-music-desktop/actions/runs/38936061865)）：单元测试、打包、静态校验、校验和与 artifact 上传全部成功；该次原生 Windows 构建产物 100,141,218 字节，`SHA256 6d8c829c1613f46da6c01abb04699e7fe8a0001bbfe2de46424d3373dc7b774e`。
 - 注意：原生 Windows 构建与本地 Linux 交叉构建的字节不同（体积与哈希均不同），两者都通过同一套静态校验；面向 Windows 测试优先用 CI 产物。
 
