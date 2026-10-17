@@ -19,7 +19,8 @@
 - README 按开源项目结构重写：现状表（区分已实测/未验证）、截图（合成数据）、快速开始、功能范围与非目标、构建与打包（Windows 便携版 / Linux AppImage / macOS DMG / 交叉构建说明）、CI、测试、架构与安全边界、数据与隐私、已知限制、参与贡献、第三方组件、许可、免责声明。
 - 原“Linux 内部构建 / Windows 单文件便携版（内部测试、未签名）/ GitHub Actions 自动打包”三节改为面向外部读者的构建与 CI 说明；不再以“内部”为标题，但保留未签名、未真机验收等事实说明。
 - 新增 `docs/assets/` 三张合成数据截图；`test:release-contents` 确认它们不进入发行包。
-- **许可未选定**：README 标注当前保留所有权利，需作者在 MIT / AGPL-3.0 间决定后加入 `LICENSE`。仓库仍未转为公开。
+- 许可已定为 **AGPL-3.0-only**：加入 `LICENSE`（GNU 官方文本）、`NOTICE`（版权、SPDX、第三方归属）、`package.json` 的 `license` 字段；README 说明许可范围、衍生作品与网络服务的源码义务，以及“许可不授予华为接口/商标/内容权利”。
+- README 进一步明确 OAuth 应用标识出处：`client_id=101444301` 来自第三方公开帖子，不是本项目注册身份。仓库**仍未转为公开**，等待作者决定。
 
 ## CI：GitHub Actions 原生 Windows 打包（已跑通）
 

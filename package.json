@@ -5,11 +5,14 @@
   "type": "module",
   "main": "out/main/index.js",
   "description": "华为音乐第三方客户端（学习版）· 非官方，仅供学习研究",
+  "license": "AGPL-3.0-only",
   "desktopName": "huawei-music-desktop.desktop",
   "author": {
     "name": "Huawei Music Desktop (unofficial internal build)"
   },
-  "engines": { "node": ">=22.15.0" },
+  "engines": {
+    "node": ">=22.15.0"
+  },
   "scripts": {
     "dev": "npm run start",
     "start": "npm run build && node scripts/start-desktop.mjs",
@@ -82,7 +85,14 @@
       "!**/electron.vite.config.ts"
     ],
     "win": {
-      "target": [{ "target": "nsis", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "forceCodeSigning": false
     },
     "nsis": {
@@ -93,12 +103,21 @@
       "createDesktopShortcut": false
     },
     "mac": {
-      "target": ["dmg"],
+      "target": [
+        "dmg"
+      ],
       "category": "public.app-category.music",
       "identity": null
     },
     "linux": {
-      "target": [{ "target": "AppImage", "arch": ["x64"] }],
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
       "syncDesktopName": true,
       "executableName": "huawei-music-desktop",
       "category": "AudioVideo;Audio;Music",
