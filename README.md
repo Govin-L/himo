@@ -4,6 +4,8 @@
 
 在 Windows / macOS / Linux 上登录**你自己的**华为账号，读取自己的音乐库，并按该账号已有权益播放华为音乐原音源。不是手机遥控器，也不使用其它音乐平台的音源替代。
 
+它**不绕过任何付费、会员、地域或 DRM 限制**：能听什么完全取决于账号已有权益；也不提供下载、解密、转存或离线导出功能。
+
 **English**: An unofficial, study-only desktop client for Huawei Music, built with Electron + React + TypeScript. It signs in with your own Huawei account, reads your own library, and plays the original Huawei Music audio your account is already entitled to. Not affiliated with or authorized by Huawei. Licensed AGPL-3.0; review the disclaimer before redistributing binaries.
 
 ---
