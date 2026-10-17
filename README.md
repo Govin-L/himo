@@ -1,6 +1,251 @@
 # 华为音乐第三方客户端（学习版）
 
-独立登录本人华为账号、读取自己的音乐库，并按账号已有权益播放华为音乐原音源。不是手机遥控器，不使用其它音乐平台替换音源。与华为无隶属或合作关系，未获官方授权，仅供学习研究。
+> **非官方项目**：与华为及其关联公司不存在隶属、合作或代理关系，未获官方授权、认可或技术支持，仅供学习研究，**不要公开分发或用于商业用途**。完整说明见[免责声明与使用边界](#免责声明与使用边界)。
+
+在 Windows / macOS / Linux 上登录**你自己的**华为账号，读取自己的音乐库，并按该账号已有权益播放华为音乐原音源。不是手机遥控器，也不使用其它音乐平台的音源替代。
+
+**English**: An unofficial, study-only desktop client for Huawei Music, built with Electron + React + TypeScript. It signs in with your own Huawei account, reads your own library, and plays the original Huawei Music audio your account is already entitled to. Not affiliated with or authorized by Huawei; keep it private.
+
+---
+
+## 目录
+
+- [当前状态](#当前状态) · [截图](#截图) · [快速开始](#快速开始) · [功能范围](#功能范围)
+- [构建与打包](#构建与打包) · [持续集成](#持续集成github-actions) · [测试](#测试)
+- [架构与安全边界](#架构与安全边界) · [数据与隐私](#数据与隐私) · [已知限制](#已知限制与非目标)
+- [参与贡献](#参与贡献) · [第三方组件](#第三方组件与致谢) · [许可](#许可) · [免责声明](#免责声明与使用边界)
+
+## 当前状态
+
+项目处于**早期开发阶段**：Linux 上完成了较完整的验证，Windows 与 macOS 尚无真机验收。下表区分“已实测”和“代码已写但未验证”，不以构建成功代替验收。
+
+| 能力 | 状态 | 证据 / 未验证 |
+|---|---|---|
+| 官方扫码登录、OAuth 回调、音乐会话 | 已在真实账号实测 | 本人扫码走完 CAS → OAuth → 音乐会话；登录页嵌入主窗口，远程页无 Node/preload/业务 IPC，取消与错误 state 的回归测试通过 |
+| 凭据保存 | 部分验证 | 主进程 `safeStorage` 只存最小音乐会话；系统后端不可用或 Linux `basic_text` 时**只保留内存会话并提示**，不静默降级明文。真实系统密钥环下的跨进程恢复尚未验收 |
+| 收藏 / 歌单 / 搜索 / 专辑 / 歌手 / 历史 | 已实现并回归 | 收藏支持总数统计与滚动分页；歌单 5 分钟进程内缓存，可手动刷新；真实账号只验证过首屏 50 首，完整 960+ 未逐页点验 |
+| 播放器 | 已实现并回归 | 单 `Audio` 实例、队列、暂停/上下曲/拖动进度/音量、顺序·列表循环·单曲循环·随机播放、行级歌词、音质选择；本地 MP3/FLAC 播放·seek·播完通过 |
+| 华为音源真实播放 | **未验收** | 需要真实会员资源的 Electron 全曲播放证据，目前只有协议层与合成音频证据 |
+| 写操作（收藏、建歌单、改简介、删自建歌单） | 协议层已实测，桌面路径未验收 | 写操作在主进程做归属校验、串行化、写后读回；不会盲重试 |
+| 播放历史同步 | 代码已写，**未验证** | 按公开 H5 形态上报，达到收听阈值才报一次、秒数为实际收听、失败静默；真实账号效果未确认 |
+| 托盘 / 关闭行为 / 媒体键 | 已实现 | Windows/macOS 真机与物理媒体键未验收 |
+| 三端安装包 | 仅 Linux 已验证 | Linux AppImage 已构建并启动验证；Windows 便携版可在 CI 原生构建但未真机运行；macOS 未构建 |
+
+更细的进度与证据见 [实现状态](docs/IMPLEMENTATION_STATUS.md)。
+
+## 截图
+
+> 截图中的数据是**离线合成测试数据**（Smoke MP3 / 测试收藏 0001…），不是任何人的真实音乐库。当前是基础视觉，正式视觉方向尚未确定。
+
+| 音乐库与播放栏 | 设置 |
+|---|---|
+| ![收藏列表与播放栏](docs/assets/library.png) | ![设置页](docs/assets/settings.png) |
+
+收藏总数与滚动分页（965 首合成数据）：
+
+![收藏总数](docs/assets/favorites-total.png)
+
+## 快速开始
+
+需要 **Node.js 22.15+** 和一个可用的桌面环境（Linux 无头环境请用 `xvfb-run`）：
+
+```sh
+git clone https://github.com/talongao/huawei-music-desktop.git
+cd huawei-music-desktop
+npm ci
+npm start
+```
+
+`npm start` 会先构建再启动本地 Electron（`npm run dev` 当前等同，不提供热更新）。首次使用点击“扫码登录”，在**华为官方页面**完成扫码；核对页面显示的应用与权限后再决定是否授权。
+
+- 以 root 运行时启动器会加进程级 `--no-sandbox`（仅开发便利），应用窗口自身仍启用 `sandbox` / `contextIsolation` / `webSecurity`。正式验收请用普通用户。
+- 代理：主进程 HTTP、Chromium 登录/播放会读取进程级 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`，**不修改系统代理**；暂不支持 SOCKS/PAC 与代理认证，配置无效时明确报错退出而不是直连。
+
+## 功能范围
+
+**已提供**
+
+- 登录：官方页面扫码、取消登录、退出账号；会话失效时提示重新登录。
+- 音乐库：收藏（总数 + 滚动分页）、我的歌单与详情、搜索歌曲、专辑与歌手详情、华为播放历史（只读）。
+- 播放：单实例播放器、队列（可持久化，不保存播放地址）、进度拖动、音量、顺序/列表循环/单曲循环/随机播放、行级歌词、标准/无损选择（按服务端实际返回展示，不虚标）。
+- 写操作：收藏增删、创建自建歌单、修改简介、删除自建歌单（仅对当前账号已确认的 `owned` 歌单）。
+- 系统集成：托盘与关闭行为设置、系统媒体控制、媒体键。
+- 其它：离线只读缓存（网络失败时显示并标注“可能不是最新”）、本机播放记录与华为历史分开显示。
+
+**明确不做**（首版非目标）
+
+每日推荐、私人 FM、离线下载、音频解密、Audio Vivid / 空间音频、Hi-Res 承诺、无缝播放与交叉淡化、均衡器、逐字歌词、桌面歌词窗、移动端、云同步、自动更新服务、其它平台音源。
+
+## 构建与打包
+
+通用前提：Node.js 22.15+。所有打包命令都显式 `publish: never`，不会自动上传或发布。
+
+### 1. 编译产物
+
+```sh
+npm run build          # typecheck + electron-vite build → out/{main,preload,renderer}
+```
+
+### 2. Windows：单文件免安装便携版
+
+```sh
+npm run dist:win:portable        # → release/win-x64-portable/*.exe
+```
+
+- 产物是**一个 EXE**：双击即可运行，不需要预装 Node.js，不弹安装向导、不写注册表、不注册系统协议。
+- 启动时会把程序解压到临时目录并在退出时清理；**用户数据不在这里**，所以换新版本或重新解压不会丢设置与登录状态（见[数据与隐私](#数据与隐私)）。代价是每次启动多一次解压，实际耗时未在 Windows 上测量。
+- 该构建**不需要 Wine**，在 Linux 上也能交叉产出；但交叉构建与原生 Windows 构建的字节不同，两者都通过同一套静态校验（`npm run test:windows-portable -- <exe>`：PE 架构、无私人目录、图标像素、与当前 `out/` 一致）。
+- **未签名**：可能被 SmartScreen 或企业策略拦截，请自行核对 SHA-256，不要为此关闭系统安全防护。
+- 需要 NSIS 安装包时用 `npm run dist:win`，必须在原生 Windows 上执行。
+
+### 3. Linux：AppImage（可选 deb）
+
+```sh
+npm run dist:linux               # → release/linux-x64/*.AppImage
+```
+
+- AppImage 直接运行；`.deb` 需要真实的主页与维护者身份，通过环境变量提供，缺失时只产出 AppImage，不编造元数据：
+
+```sh
+DESKTOP_BUILD_HOMEPAGE=https://example.com \
+DESKTOP_BUILD_MAINTAINER='Name <mail@example.com>' \
+npm run dist:linux
+```
+
+- 校验实际产物（从 AppImage 内提取二进制并隔离启动，不读默认用户目录）：
+
+```sh
+npm run test:packaged -- release/linux-x64/huawei-music-desktop-0.0.1-linux-x86_64-internal.AppImage
+```
+
+### 4. macOS：DMG
+
+```sh
+npm run dist:mac:arm64           # 或 dist:mac:x64，必须在 macOS 上运行
+```
+
+未在本项目 CI 构建，也未做真机验收。签名/公证需要作者自己的证书，缺失时视为内部未签名构建。
+
+### 5. 发行内容与校验和
+
+```sh
+npm run test:release-contents    # 按 build.files 白名单模拟打包，断言不含 .local/、research/、docs/、test/、scripts/、src/
+node scripts/release-checksums.mjs release/<dir>   # 生成 SHA256SUMS（不自动上传）
+```
+
+## 持续集成（GitHub Actions）
+
+工作流：[`.github/workflows/windows-portable.yml`](.github/workflows/windows-portable.yml)，在 **windows-latest** 上原生构建 Windows 便携版。
+
+- 步骤：`npm ci` → 单元测试 → `dist:win:portable` → 静态校验 → `SHA256SUMS` → 发布 Release。
+- 触发：Actions 页面手动运行（可勾选 `smoke`、`release`），或推送 `v*` 标签。**默认不在每次 push 时构建**：私有仓库免费额度为每月 2000 分钟，Windows runner 按 2 倍计费，一次约 10–20 计费分钟。
+- **产物进 Release**：手动运行（`release` 默认勾选）或标签触发时，会把 exe 与 `SHA256SUMS` 附到对应标签的 Release（标签不存在则按 `package.json` 版本创建；标签与版本不一致直接失败）。若本次不发 Release，则回退为 Actions artifact（保留 7 天）。
+- 可选的 `smoke` 会在 Windows 上额外跑一次 Electron 烟测（步骤内 `choco install ffmpeg` 造音频夹具）；它失败不会阻断产物，但会在日志中报错。
+- Fork 后可直接复用：无需任何密钥；只有创建 Release 需要仓库自带的 `GITHUB_TOKEN`（工作流已声明 `contents: write`）。
+- 本项目**不会**自动上传到对象存储或任何第三方分发渠道。
+
+## 测试
+
+```sh
+npm test                        # 离线单测（协议、状态机、缓存、播放决策）
+npm run typecheck
+npm run build
+npm run test:electron           # 真实 Electron：渲染边界、本地音频播放/seek/播完、媒体与代理边界
+npm run test:electron-ui        # 真实 Electron 页面回归：单 Audio、收藏写回、歌词/队列、设置、跨进程持久化
+npm run test:electron-business  # 只替换登录页与 HTTP 传输，跑生产 AuthManager/IPC：读写、缓存、退出清理
+npm run test:electron-favorites # 965 首合成库：总数、滚动分页、失败重试、切页位置、完整队列
+npm run test:login-callback     # 离线 OAuth 导航回归（不扫码、不兑换令牌）
+npm run test:release-contents   # 发行白名单与 asar 内容检查
+```
+
+平台要求与边界：
+
+- Linux 无头环境需要 `xvfb-run`（测试启动器会自动使用，并隔离 fontconfig 缓存以避免中文方框）。Windows / macOS 直接使用当前桌面会话。
+- 音频相关测试需要 `ffmpeg` 生成合成音频（Windows CI 里由工作流安装）。
+- 以上命令都**不登录任何账号**、不读取 `.local/`。可选的真实账号复验单独走 `npm run test:login-live -- --login`，只在本人明确准备扫码时执行。
+
+## 架构与安全边界
+
+```text
+Electron 主进程
+  华为 API / 官方登录页宿主 / safeStorage / JSON 持久化 / 托盘与窗口
+        │  白名单 IPC（结构化请求与结果）
+preload：window.desktop 固定方法
+        │
+React 渲染进程（本地文件）
+  页面、队列、单个 Audio、歌词、系统 Media Session
+```
+
+三条不可放宽的边界：
+
+1. **凭据与业务 HTTP 只在主进程**；渲染进程只能调用固定白名单 API，拿不到音乐 Token 或账号 Token。
+2. **官方登录页没有应用权限**：它作为 `WebContentsView` 嵌在主窗口内（不是第二个窗口），但独立 partition、无 preload、无 Node、无业务 IPC，权限请求与下载一律拒绝；取消只走 `auth:cancelLogin`。
+3. **不关闭 `webSecurity`、不放宽 TLS 校验、不注册全局 `hms://` 协议、不修改系统代理**。
+
+目录结构：
+
+| 路径 | 职责 |
+|---|---|
+| `src/main/` | 主进程：登录宿主、业务请求、存储、IPC、托盘、窗口 |
+| `src/preload/` | 唯一的 `window.desktop` 桥 |
+| `src/renderer/` | React 页面、播放器、歌词、样式 |
+| `src/shared/` | DTO、错误类型、IPC 通道常量、显示名 |
+| `src/*.mjs` | 独立协议实现（OAuth/PKCE、音乐接口、歌词解析），可在 Node 下直接测试 |
+| `test/` | 离线单测 |
+| `scripts/` | 打包、校验、Electron 集成测试（不进入发行包） |
+| `docs/` | 方案、接口契约、验证记录 |
+| `.local/`、`research/` | 私人凭据与研究现场，**不提交、不打包**（已在 `.gitignore`） |
+
+## 数据与隐私
+
+- 用户数据（设置、队列、本机播放记录、加密会话）保存在 Electron 的 `userData` 目录，不在程序目录里；退出账号会清除本机个人数据，通用设置保留。
+- 只保存完成后续请求所需的**最小音乐会话**（音乐 Token、本人音乐用户标识、到期字段），账号 AT/RT 不落地。
+- 系统安全存储不可用（含 Linux `basic_text`）时**不写盘**，只保留内存会话并明确提示；不设置 `setUsePlainTextEncryption`。
+- 无遥测、无崩溃上报、无自动更新检查；日志不写 URL query、请求体、原始响应、Authorization 或曲目私人标识。
+- 播放地址只作为当次播放结果交给渲染进程，不写日志、不写队列文件、不持久化。
+- 本项目不读取开发者机器上的私人会话，也不在运行时导入任何外部凭据。
+
+## 已知限制与非目标
+
+- Windows / macOS **尚无真机验收**：本 README 中的“已实现”不等于这两个平台可用。
+- 华为音源的真实 Electron 全曲播放（标准与无损）仍待授权验证；协议层解码证据不能替代它。
+- 音乐会话是另一种凭据（到期字段提示约 7 天，未实测到期的完整周期）；标准 refresh 流程未打通，真正失效后需要重新扫码，本项目不会每小时强制登录。
+- 歌单编辑只提供已验证的“简介修改”，不提供改名/封面/曲目增删的假按钮。
+- 每日推荐接口目前不可用（HTTP 400），首版不做。
+- 该 OAuth 应用标识来自公开兼容性研究，**不是本项目自有注册身份**；公开分发前需自行评估服务条款、应用身份与商标问题。
+
+## 参与贡献
+
+欢迎 Issue 与 PR，但请先确认方向属于本项目的合法使用范围：
+
+- **不接受**绕过付费/会员/地域/版权限制、音频解密、接口滥用、批量抓取，或引入其它音乐平台音源、账号代理、云端转发的改动。
+- 修复缺陷、改进可访问性与中文排版、补充测试、提升跨平台兼容性是受欢迎的方向。
+- 提交前请通过 `npm test`、`npm run typecheck`、`npm run build`；涉及界面或播放器的改动请附上真实运行截图或测试输出。
+- 不要提交 `.local/`、`research/`、真实账号数据、Token、Cookie 或抓包内容；测试请使用合成数据。
+- 涉及真实账号的写操作验证由维护者本人在明确授权下执行，不接受通过 PR 自动运行。
+
+## 第三方组件与致谢
+
+- 运行时/框架：Electron、React、undici；界面图标使用 [Lucide](https://lucide.dev)（ISC）。应用与托盘图标由 `scripts/make-icon.mjs` 从 Lucide 的 `music` 字形生成，许可与版权声明见 [`build/icon.LICENSE.txt`](build/icon.LICENSE.txt)。
+- 本项目为独立实现，不包含第三方客户端代码；接口形态来自公开网络资源与本人账号的兼容性实验，记录见 [接口契约](docs/API_CONTRACT.md) 与 [验证记录](docs/authorized-feature-validation.md)。
+
+## 许可
+
+**尚未选定开源许可。** 在加入 `LICENSE` 之前，仓库默认保留所有权利（All rights reserved），他人不可复制、修改或再分发。作者在 **MIT** 与 **AGPL-3.0** 之间选择：前者最宽松、便于复用；后者要求衍生作品同样开源，能减少闭源商用。
+
+无论选择哪种许可，都不涉及以下内容：项目与华为无隶属或合作关系；“华为 / HUAWEI / 华为音乐”等名称与商标归各自权利人所有；本仓库不授予华为服务的接口使用权、音乐内容的使用权或任何官方身份。
+
+## 文档索引
+
+| 文档 | 内容 |
+|---|---|
+| [实现状态](docs/IMPLEMENTATION_STATUS.md) | M0–M6 进度、当前验证范围与阻塞项 |
+| [实现方案](docs/IMPLEMENTATION_PLAN.md) | 目标架构、页面行为、阶段验收标准 |
+| [接口契约](docs/API_CONTRACT.md) | 已验证的接口参数与常见陷阱 |
+| [授权验证记录](docs/authorized-feature-validation.md) | 本人授权下的功能实测与清理结果 |
+| [登录回调修复](docs/LOGIN_CALLBACK_FIX.md) | 扫码登录导航问题的定位与修复 |
+| [待验证清单](docs/token-lifetimes-and-renewal.md) | 凭据期限与续期探索 |
+| [历史流水](docs/IMPLEMENTATION_HISTORY.md) | 过程记录；与当前状态冲突时以状态文档为准 |
 
 ## 免责声明与使用边界
 
@@ -10,143 +255,7 @@
 - **合法使用前提**：仅在适用法律、相关服务协议及实际授权允许的范围内，使用本人合法持有的账号访问有权使用的内容。个人研究、非商业用途、购买会员或能够成功调用接口，均不当然意味着已获准使用第三方客户端、接口或分发相关软件。
 - **禁止用途**：不得利用本项目绕过付费、会员、地域、版权或技术保护限制；不得破解、下载后转售或未经许可传播受保护内容；不得盗取账号、收集他人凭据、滥用接口、未经授权批量抓取数据，或搭建面向公众的音源解析、转发及商业服务。
 - **接口与登录身份**：本项目不是华为提供的 SDK，也不代表获得了接口使用许可。当前 OAuth 应用标识来自公开兼容性研究，并非本项目自有注册身份；技术上登录或播放成功不构成授权证明。公开源代码、发布安装包或商业化之前，仍须核查服务条款、应用身份、商标与内容权利，并取得必要许可。
-- **使用风险与保证限制**：项目处于实验阶段，接口可能变更或停止服务，也可能发生功能错误、账号限制、数据丢失或安全问题。在适用法律允许的范围内，项目按现状提供，不承诺持续可用、适合特定用途、绝对安全或不涉及第三方权利。不要将其用于关键业务，不要向维护者发送密码、Cookie、授权码或令牌。法律规定不得排除或限制的责任，不因本声明而免除。
-- **权利反馈**：权利人如认为项目中的代码、文档、标识或使用方式涉及其合法权益，可通过本仓库的 Issue 或仓库托管平台的联系渠道提供具体说明与权利依据。请勿公开提交个人信息或凭据；维护者会核查，并视情况暂停相关功能、调整或移除争议内容。
+- **使用风险与保证限制**：项目处于实验阶段，接口可能变更或停止服务，也可能发生功能错误、账号限制、数据丢失或安全问题。在适用法律允许的范围内，项目按现状提供，不承诺持续可用、适合特定用途、绝对安全或不涉及第三方权利。不要将其用于关键业务，不要向维护者发送密码、Cookie、授权码或令牌。
+- **权利反馈**：权利人如认为项目中的代码、文档、标识或使用方式涉及其合法权益，可通过本仓库 Issue 或托管平台联系渠道提供具体说明与权利依据。请勿公开提交个人信息或凭据；维护者会核查，并视情况暂停相关功能、调整或移除争议内容。
 
-**本声明不是法律意见，也不替代必要授权，更不能保证免除法律责任或避免权利主张。** 在完成合规审查前，项目保持私有与内部测试状态；有意公开分发时，应先咨询熟悉软件、网络服务及知识产权事项的律师。
-
-## 当前实现状态
-
-**Electron + React + TypeScript 已落地，当前以 Linux 真实 Electron 验证共享逻辑与界面。** 已有真实扫码登录/首批收藏证据；真实华为 CDN 的 MP3/FLAC 在 Electron 全曲播放、安全凭据跨进程恢复仍待验收。因此当前是**内部测试版，不是完整验收版或公开发行版**。
-
-## 启动
-
-需要 Node.js 22.15+、Linux 桌面与常规 Electron 运行库：
-
-```sh
-npm ci
-npm start
-```
-
-`npm start` 构建并启动本地 Electron，不使用浏览器演示页或业务后端。`npm run dev` 当前与 start 相同，不声称支持热更新。root 仅用于开发测试，启动器会加进程级 `--no-sandbox`；应用窗口本身仍启用 sandbox/contextIsolation/webSecurity。正式桌面验收应以普通用户运行。
-
-无图形环境的离线测试自动使用 Xvfb；Xvfb 不代表物理音频输出/系统托盘已验收。测试需要 `ffmpeg` 生成合成音频和可用中文系统字体。测试启动器使用独立 fontconfig 缓存，解决系统缓存版本比 Electron 更新导致的中文方框，不改系统配置、不将整套字体打入发行包。
-
-## 已实现与证据
-
-| 功能 | 当前实现 / 验证边界 |
-|---|---|
-| 官方扫码、回调、音乐会话 | 真实 Electron 本人扫码通过，读取首批 50 首收藏；官方页嵌在主窗口的 `WebContentsView` 里（不再弹第二个窗口），顶部保留“取消登录”，远程页仍无 Node/preload/业务 IPC；取消/错误 state/清理故障回归通过 |
-| 应用图标 | 由 `scripts/make-icon.mjs` 从开源 Lucide 图标（ISC，Music）生成：512 应用图标 + 32 托盘图标；Windows 包内图标已按像素校验（品牌底色/字形覆盖率），Linux AppImage 内图标与源文件逐字节一致 |
-| 窗口与外观 | 已移除 Electron 默认菜单（Windows/Linux 无 File/Edit/View/Window 菜单栏；macOS 仅保留最小标准角色以保证快捷键盘可用），窗口标题与侧栏使用“华为音乐第三方客户端（学习版）” |
-| 收藏列表 | 每页 50 首，滚动接近底部自动加载，失败保留内容并可重试；切页保留数据和位置 |
-| 收藏总数 | 接口没有已确认的直接总数字段，主进程后台分页到末页后按 ID 去重；总数与“已加载 N 首”分开，失败不显示假总数；计数/显示共用页索引，不重复请求 |
-| 播放全部 | 先补齐分页，准备中可取消；不再把当前一页叫“全部”；965 首合成库队列与磁盘保存完整验证通过 |
-| 歌单/搜索/专辑/歌手/历史 | 主进程 + 白名单 IPC + 页面；歌单/专辑分页；本机历史与华为只读历史分开；正式业务集成使用合成 HTTP 响应通过 |
-| 歌单缓存 | 进程内 5 分钟缓存：重复进入歌单页不再重复请求，只有“刷新”回源；创建/改名/简介/删除与切换账号会失效缓存；离线时有标记的磁盘缓存仍可用 |
-| 播放模式 | 设置里可选顺序播放/列表循环/单曲循环/**随机播放**（工具栏随机按钮同源）；随机模式的“上一首”按实际播放顺序回退，而不是打乱后的下标顺序 |
-| 播放历史上报 | 按公开 H5 的 `recentlyplayed/create` 形态上报：真实收听达到阈值后只报一次，秒数为实际收听而非整曲时长；失败静默、不重试、不影响播放，可在设置关闭。**尚未用真实账号验证服务端结果** |
-| 播放器 | 单 Audio、暂停/上下曲/seek/音量/队列/随机/循环/音质选择/行级歌词/MediaSession；本地 MP3/FLAC 与切页不中断通过，不等于真实 CDN/听播验收 |
-| 账号写操作 | 收藏、带歌曲建歌单、简介修改、删自建歌单；主进程归属核验/串行/幂等/写后读回/创建未决意图；本轮只有合成集成测试，真实桌面写验收需另行授权 |
-| 离线只读缓存 | 收藏与歌单网络失败可显示 5MB 上限缓存，并标“离线缓存，可能不是最新”；400 不清会话 |
-| 凭据 | 主进程 safeStorage 保存最小音乐会话；不可用或 Linux basic_text 时只保留内存并提示，绝不明文降级；当前 headless Linux 无可用 backend，真实加密重启尚未通过 |
-| 系统集成 | 托盘/关闭行为/MediaSession/媒体键已有代码；真实桌面媒体键、托盘可恢复性和睡眠恢复待验 |
-| Linux 包 | AppImage/unpacked 内部构建；只打包 out + 必要依赖，检查私有资料/研究材料不进入包；见下方命令 |
-
-**截图中的 Smoke MP3/FLAC、测试收藏 0001–0965 是离线合成夹具，不是你的真实音乐库。** 965 首测试验证的是完整大列表行为，本轮没有复用 `.local/` 中的真实会话重新读取本人 960+ 收藏。
-
-## 测试
-
-```sh
-npm test                         # 140 项离线协议/业务/状态测试
-node_modules/.bin/electron --no-sandbox scripts/make-icon.mjs   # 需要时重生成图标（Xvfb 下：xvfb-run -a）
-npm run typecheck
-npm run build
-npm run test:electron             # 真实 Electron 边界、本地音频/seek/ended、代理路由
-npm run test:electron-ui          # 页面、设置同步、最小窗口、队列跨进程恢复
-npm run test:electron-favorites   # 965 首合成库，滚动/总数/重试/切页/完整队列
-npm run test:electron-business    # 正式 AuthManager/API/IPC；仅登录页与 HTTP 为合成响应
-npm run test:login-callback       # 离线 CAS/service/错误 state 导航
-npm run test:release-contents     # 模拟发行白名单并检查 asar
-```
-
-可选公开网络测试（不扫码、不用个人会话）：
-
-```sh
-npm run test:login-navigation
-npm run test:login-cancel
-npm run probe:login
-npm run probe:music
-```
-
-可选真实系统安全存储：`npm run test:safe-storage-restart`。使用合成会话跨三个 Electron 进程，系统 backend 不可用时明确失败；本机当前 basic_text，不能用单测加密器代替系统验收。
-
-真实账号本人扫码入口：`npm run test:login-live -- --login --qr --full-library`。需当前用户明确准备授权；集中扫码后核验总数、完整分页和滚动加载，只输出数量，不输出 ID/曲名/凭据，并清临时 profile 和二维码。不带 `--full-library` 只检首批；不会自动写账号或冒充全曲播放验收。其它研究命令仅按 [接口契约](docs/API_CONTRACT.md) 与明确授权使用。
-
-## Linux 内部构建
-
-```sh
-npm run dist:linux
-npm run test:packaged -- release/linux-x64/linux-unpacked/huawei-music-desktop
-npm run test:packaged -- release/linux-x64/huawei-music-desktop-0.0.1-linux-x86_64-internal.AppImage
-node scripts/release-checksums.mjs release/linux-x64
-```
-
-普通 Linux 桌面直接执行 AppImage。`test:packaged` 从真正 AppImage 提取二进制后启动隔离 profile，核对 archive 与当前 out 一致、无私人路径、renderer 边界与设置写入。它不是本人账号/真实音频验收。
-
-- `.deb` 需要真实主页和 `Name <email>` 维护者；有真实发布身份时通过 `DESKTOP_BUILD_HOMEPAGE`、`DESKTOP_BUILD_MAINTAINER` 传入。缺失就只产出 AppImage，不编造地址。
-- Windows NSIS 安装包、macOS 分架构 DMG 入口保留为原生 OS 上的 `dist:win`、`dist:mac:x64`、`dist:mac:arm64`。Windows 单文件便携版可在 Linux 不借助 Wine 交叉打包，见下节。**不需要 Windows 才能验证共享 API/播放器逻辑**，交叉打包也不等于 Windows/macOS 已验收。
-- 所有构建 `publish: never`，不自动上传。无真实签名身份的产物仅为内部测试；不能声称官方客户端或公开分发已获授权。
-- `release/`、`dist/` 可能有历史包/失败的 NSIS 中间文件；只以本次成功命令及当前 Linux 目录为准，不把旧包当现役交付。
-
-## Windows 单文件便携版（内部测试、未签名）
-
-```sh
-npm run dist:win:portable
-npm run test:windows-portable -- release/win-x64-portable/huawei-music-desktop-0.0.1-win-x64-portable-internal.exe
-node scripts/release-checksums.mjs release/win-x64-portable
-```
-
-- 只需一个 EXE，在 Windows x64 双击运行；不要求预装 Node.js，不弹安装向导、不生成卸载器、不注册系统协议。构建使用 electron-builder 的 portable 目标，**不调用 Wine**。
-- 每次启动都会把程序解压至临时目录，正常退出后清理，因此启动比已解压目录版多一次解压成本。实际速度受磁盘、杀毒扫描等影响，尚无 Windows 测量，不承诺秒数。
-- 设置、队列、本机历史与加密音乐会话仍保存在 Electron 的 `userData`（Windows 通常在 `%APPDATA%` 下），不在临时解压目录；正常重启或替换同一应用身份的新 EXE 不应因解压重置数据。`npm run test:portable-data` 已在 Linux 实际打包 Electron 中验证：删除第一份程序，换目录重新解压启动，userData 不变，设置、队列与 Chromium 本机存储均可恢复；这不是 Windows 凭据验收。退出账号会主动清个人数据。安全存储不可用/会话失效时仍须重新登录。
-- “免安装”不等于“数据跟随 EXE”：复制 EXE 到另一台电脑不会带上原电脑的设置/登录，加密凭据也不能保证跨电脑或 Windows 用户解密。不把账号数据迁入 EXE 同目录来冒充全便携。
-- 当前产物约 95 MiB，已在 Linux 静态拆包确认内嵌应用为 x64、内容与当前 `out/` 一致、无私人资料且无签名；外层 NSIS 启动器为 x86，不改变内嵌程序的 x64 要求。**尚未在 Windows 启动、听播或验证凭据恢复**。
-- 未签名程序可能被 SmartScreen 或企业安全策略拦截；不要求关闭防护或绕过组织策略。仅供已知来源的内部测试，不自动上传或公开分发。
-
-## GitHub Actions 自动打包（仅 Windows 便携版）
-
-`.github/workflows/windows-portable.yml` 在 **windows-latest** 上自动：`npm ci` → 单元测试 → `dist:win:portable` → 静态校验（内嵌 x64、无私人目录、图标像素、与当前构建一致）→ 生成 SHA256SUMS → 上传 artifact。
-
-- 触发：Actions 页手动 `Run workflow`，或推送 `v*` 标签；默认**不在每次 push 时构建**，因为私有仓库免费额度为每月 2000 分钟、Windows runner 按 2 倍计费（一次约 10–20 计费分钟）。
-- 手动触发时可勾选 `smoke`，额外在 Windows 上跑一次 Electron 烟测（会先 `choco install ffmpeg`，因为 runner 不自带；该步骤失败不阻断产物，但会在日志里报错）。
-- **产物进 GitHub Release**：手动运行（默认勾选 `release`）或推送 `v*` 标签时，会把 exe 与 `SHA256SUMS` 上传到对应标签的 Release（标签不存在则按 `package.json` 版本创建，且标签与版本不一致会直接报错）；只有不发包的运行才回退到 Actions artifact（保留 7 天）。
-- **仍不自动上传 OSS、不自动公开仓库**；私有仓库的 Release 仅协作者可见。下载后请核对 SHA256SUMS。
-- 已在 GitHub 的 windows-latest 上真实跑通（[run 38936061865](https://github.com/talongao/huawei-music-desktop/actions/runs/38936061865)）：单元测试、打包、静态校验、校验和与 artifact 上传全部成功；该次原生 Windows 构建产物 100,141,218 字节，`SHA256 6d8c829c1613f46da6c01abb04699e7fe8a0001bbfe2de46424d3373dc7b774e`。
-- 注意：原生 Windows 构建与本地 Linux 交叉构建的字节不同（体积与哈希均不同），两者都通过同一套静态校验；面向 Windows 测试优先用 CI 产物。
-
-## 已知边界
-
-- AT 实测 3600 秒，音乐 Token 是另一种凭据；新进程 78 分钟复用曾成功，约 7 天只是到期字段线索，不能承诺固定期限。
-- 自动续期未打通，首版真正失效后重新扫码，不每小时强制登录。
-- MP3/FLAC 协议研究样本曾完整 FFmpeg 解码，但不能替代 Electron 真实 CDN 的 metadata/seek/ended 与设备听播。
-- 每日推荐不做。歌单只提供已验证的简介修改，不提供改名/封面/曲目编辑的空按钮。
-- 不做下载/解密/特殊音质/Hi-Res 承诺/自动更新。
-- 登录页在主窗口内，取消按钮固定在顶部 48px 条；该条高度与应用内登录视图的预留位置是同一个常量（`LOGIN_VIEW_TOP_INSET`），改动样式时需同步。
-- 应用图标为 Lucide 衍生作品，其 ISC 许可与版权声明见 `build/icon.LICENSE.txt`。
-- 显示名集中在 `src/shared/app-name.mjs`；界面名改为“学习版”不影响技术包名（`package.json` 的 `name` 保持 `huawei-music-desktop`），因此设置/登录数据的目录不变、旧数据不会丢。构建产物的可执行文件名跟随 `build.productName`。
-- 菜单栏是故意移掉的，不是样式问题；需要 DevTools 时应使用外部调试方式，而不是恢复默认菜单。
-- 播放历史上报的接口形态来自公开 H5 资源，尚未用真实账号验证；若服务端拒绝，只会静默失败，不重试、不改变播放行为。
-- 当前 OAuth client_id 来自公开兼容性研究，不是本项目自有注册身份；公开分发前仍需身份、授权和条款评估。
-
-主进程 HTTP 与 Chromium 登录/音频遵循进程级 HTTP(S) 代理配置，不改系统代理。暂不支持 SOCKS/PAC/代理认证；错误配置明确拒绝而非静默直连。NO_PROXY 中 CIDR 仅主进程支持，Chromium 侧保留可表达的域名/IP 例外。
-
-## 文档入口
-
-- [当前进度 M0–M6](docs/IMPLEMENTATION_STATUS.md)：现役状态、测试与未验项。
-- [实现方案](docs/IMPLEMENTATION_PLAN.md)：目标架构/行为，不代表全部已实现。
-- [接口契约](docs/API_CONTRACT.md)：已测协议/参数与陷阱。
-- [本人授权研究证据](docs/authorized-feature-validation.md)：历史真实写操作与清理证据。
-- [登录回调修复](docs/LOGIN_CALLBACK_FIX.md)、[历史实现流水](docs/IMPLEMENTATION_HISTORY.md)：过程记录，冲突以当前状态为准。
-
-`.local/` 包含真实凭据与私人音乐库数据，`research/` 是私有研究现场；不自动导入、不打印、不上传、不提交、不打包。renderer 只取固定 DTO，临时播放地址不写日志或磁盘队列。本轮未使用私人会话、未执行真实账号写操作。
+**本声明不是法律意见，也不替代必要授权，更不能保证免除法律责任或避免权利主张。** 有意公开分发时，请先咨询熟悉软件、网络服务及知识产权事项的律师。

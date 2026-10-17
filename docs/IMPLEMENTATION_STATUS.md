@@ -14,6 +14,13 @@
 | M5 视觉与系统集成 | in-progress | Linux Electron 实际截图覆盖 1180×760、960×640、歌词/队列互斥、固定播放器/侧栏。中文字体测试缓存隔离修复，不修改系统。托盘/关闭/媒体键有代码，物理媒体键、无托盘桌面及睡眠恢复仍待验。四方向样机已提供，**用户尚未选择，不宣称视觉定稿**。 |
 | M6 发行工程 | in-progress | Linux x64 AppImage 已构建；从实际 AppImage 提取二进制并启动隔离 profile，核对打包文件与当前 out 一致、renderer 无 Node、设置可保存，全部通过。Windows x64 单文件 portable EXE 已按后续用户要求在 Linux 交叉打包成功（99,522,256 字节，未用 Wine）；静态拆包确认内嵌 x64、无私有目录/源码、与当前 out 一致。启动速度/Windows 登录恢复/媒体仍未验收。原生 NSIS 安装包与 macOS arm64/x64 DMG 入口保留；不把历史失败的 NSIS 中间产物当安装包。deb 等待真实主页/维护者身份，不编造。 |
 
+## 开源准备（README 重写）
+
+- README 按开源项目结构重写：现状表（区分已实测/未验证）、截图（合成数据）、快速开始、功能范围与非目标、构建与打包（Windows 便携版 / Linux AppImage / macOS DMG / 交叉构建说明）、CI、测试、架构与安全边界、数据与隐私、已知限制、参与贡献、第三方组件、许可、免责声明。
+- 原“Linux 内部构建 / Windows 单文件便携版（内部测试、未签名）/ GitHub Actions 自动打包”三节改为面向外部读者的构建与 CI 说明；不再以“内部”为标题，但保留未签名、未真机验收等事实说明。
+- 新增 `docs/assets/` 三张合成数据截图；`test:release-contents` 确认它们不进入发行包。
+- **许可未选定**：README 标注当前保留所有权利，需作者在 MIT / AGPL-3.0 间决定后加入 `LICENSE`。仓库仍未转为公开。
+
 ## CI：GitHub Actions 原生 Windows 打包（已跑通）
 
 - 仓库镜像到 GitHub 私有仓库（`talongao/huawei-music-desktop`），新增 `.github/workflows/windows-portable.yml`：手动或 `v*` 标签触发，windows-latest 上执行 `npm ci` → 单元测试 → `dist:win:portable` → 静态校验 → SHA256SUMS → artifact（保留 7 天），不自动发布、不上传 OSS。

@@ -1,4 +1,4 @@
-name: Windows portable (internal, unsigned)
+name: Windows portable build (unsigned)
 
 # Runs only when asked or when a version tag is pushed, because GitHub Free gives
 # private repositories 2000 Action minutes per month and Windows runners bill at 2x.
@@ -109,7 +109,7 @@ jobs:
             gh release upload $tag --repo $env:GITHUB_REPOSITORY $exe $sums --clobber
           } else {
             gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA `
-              --title "华为音乐第三方客户端（学习版） $tag（内部未签名）" --notes $notes $exe $sums
+              --title "华为音乐第三方客户端（学习版） $tag（未签名构建）" --notes $notes $exe $sums
           }
 
       - uses: actions/upload-artifact@v4
