@@ -17,6 +17,7 @@
 - 主进程持有凭据与业务 HTTP；renderer 只用白名单 IPC。官方登录页嵌在主窗口的 `WebContentsView` 中（不是第二个窗口），仍必须无 preload/Node/业务 IPC，取消只能走 `auth:cancelLogin`；顶部取消条高度与 `LOGIN_VIEW_TOP_INSET` 必须一致。
 - 不关闭 webSecurity/TLS 校验；不抢占系统 hms://；不把研究原型的0600明文文件当正式安全存储。
 - 不创建复杂抽象、插件框架、后端服务、云端令牌代理或移动端工程。
+- 不发布安装包（GitHub Release、对象存储等公开下载渠道）；仓库可以开源，但二进制只应留在本地或短期 CI artifact。
 - 不擅自公开仓库/产物、变更系统代理或删除研究现场。
 - 应用/托盘图标由 `scripts/make-icon.mjs` 从 Lucide（ISC）生成；换图标要重跑脚本并保留 `build/icon.LICENSE.txt` 归属声明。
 - 不要恢复 Electron 默认菜单栏（Windows/Linux 应为无菜单，macOS 仅最小角色）；显示名统一用 `src/shared/app-name.mjs`，不得改 `package.json` 的 `name`（会挪动 userData 路径、丢旧数据）。

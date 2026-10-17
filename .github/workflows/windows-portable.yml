@@ -1,8 +1,8 @@
 name: Windows portable build (unsigned)
 
-# Runs only when asked or when a version tag is pushed, because GitHub Free gives
-# private repositories 2000 Action minutes per month and Windows runners bill at 2x.
-# Add a `push: branches: [main]` trigger below if you want every push packaged.
+# Builds and verifies the Windows portable build on demand. It deliberately does NOT create a
+# GitHub Release or publish an installer: this project must not distribute binaries.
+# Add a `push: branches: [main]` trigger below if you want every push built and checked.
 on:
   workflow_dispatch:
     inputs:
@@ -10,16 +10,12 @@ on:
         description: Also run the Windows Electron smoke test (installs ffmpeg, uses more minutes)
         type: boolean
         default: false
-      release:
-        description: Publish/refresh the GitHub Release for the current version tag
-        type: boolean
-        default: true
   push:
     tags:
       - 'v*'
 
 permissions:
-  contents: write
+  contents: read
 
 concurrency:
   group: windows-portable-${{ github.ref }}
@@ -81,39 +77,11 @@ jobs:
         continue-on-error: true
         run: npm run test:electron
 
-      # Tag pushes and manual runs publish a Release; that downloadable asset replaces the
-      # artifact for those runs. Non-release runs keep the artifact only.
-      - name: Publish GitHub Release
-        if: ${{ startsWith(github.ref, 'refs/tags/') || inputs.release == true }}
-        shell: pwsh
-        env:
-          GH_TOKEN: ${{ github.token }}
-        run: |
-          $version = (Get-Content package.json -Raw | ConvertFrom-Json).version
-          $tag = if ($env:GITHUB_REF -like 'refs/tags/*') { $env:GITHUB_REF_NAME } else { "v$version" }
-          if ($env:GITHUB_REF -like 'refs/tags/*' -and $tag -ne "v$version") {
-            throw "tag $tag does not match package.json version v$version"
-          }
-          $exe = (Get-ChildItem release/win-x64-portable/*.exe | Select-Object -First 1).FullName
-          $sums = (Resolve-Path release/win-x64-portable/SHA256SUMS).Path
-          $notes = @'
-          非官方第三方客户端（学习版）的内部未签名构建，与华为无隶属或合作关系，未获官方授权，仅供学习研究。
-
-          - 单文件免安装：下载后直接运行，首次启动会解压到临时目录，退出后清理。
-          - 设置/队列/登录数据保存在用户数据目录，替换本文件不会清空；跨电脑不会携带登录状态。
-          - 未签名，可能被 SmartScreen 拦截；请核对下方 SHA256SUMS 附件。
-          - Windows 上的人工验收（真实登录、播放、托盘）仍未见证据，请自行判断是否使用。
-          '@
-          gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
-          if ($LASTEXITCODE -eq 0) {
-            gh release upload $tag --repo $env:GITHUB_REPOSITORY $exe $sums --clobber
-          } else {
-            gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA `
-              --title "华为音乐第三方客户端（学习版） $tag（未签名构建）" --notes $notes $exe $sums
-          }
-
+      # No GitHub Release: binaries must not be distributed from this repository.
+      # A manual run keeps one short-lived artifact so the maintainer can verify the output;
+      # artifacts require a GitHub login and are not a distribution channel.
       - uses: actions/upload-artifact@v4
-        if: ${{ !(startsWith(github.ref, 'refs/tags/') || inputs.release == true) }}
+        if: ${{ github.event_name == 'workflow_dispatch' }}
         with:
           name: huawei-music-study-windows-x64-unsigned
           path: |
@@ -121,4 +89,4 @@ jobs:
             release/win-x64-portable/SHA256SUMS
           if-no-files-found: error
           # Private-repo storage is limited (500 MB on Free); artifacts expire automatically.
-          retention-days: 7
+          retention-days: 3

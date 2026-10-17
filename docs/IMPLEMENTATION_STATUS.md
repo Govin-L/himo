@@ -20,7 +20,9 @@
 - 原“Linux 内部构建 / Windows 单文件便携版（内部测试、未签名）/ GitHub Actions 自动打包”三节改为面向外部读者的构建与 CI 说明；不再以“内部”为标题，但保留未签名、未真机验收等事实说明。
 - 新增 `docs/assets/` 三张合成数据截图；`test:release-contents` 确认它们不进入发行包。
 - 许可已定为 **AGPL-3.0-only**：加入 `LICENSE`（GNU 官方文本）、`NOTICE`（版权、SPDX、第三方归属）、`package.json` 的 `license` 字段；README 说明许可范围、衍生作品与网络服务的源码义务，以及“许可不授予华为接口/商标/内容权利”。
-- README 进一步明确 OAuth 应用标识出处：`client_id=101444301` 来自第三方公开帖子，不是本项目注册身份。仓库**仍未转为公开**，等待作者决定。
+- README 进一步明确 OAuth 应用标识出处：`client_id=101444301` 来自第三方公开帖（吾爱破解下载工具 / `Tontonnow/hwyy`），帖中未说明获取方式；我们的抓取显示它同时是华为音乐在 AppGallery 的应用 ID（`C101444301`），官方回调 scheme 为 `com.huawei.apps.101444301:/oauth2redirect`，因此极可能是官方 App 自身身份。
+- 作者选择方案 B：仓库开源（AGPL-3.0）并保留现状，但**不发布安装包**——CI 移除 Release 步骤，只在手动运行时保留 3 天 artifact 供核对；README/免责声明写明身份不属于本项目、随时失效、涉及条款与冒用风险。
+- GitHub 仓库转为公开；Gitee 仍私有。
 
 ## CI：GitHub Actions 原生 Windows 打包（已跑通）
 
