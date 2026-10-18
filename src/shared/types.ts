@@ -41,7 +41,15 @@ export type PlaylistList = { playlists: Playlist[]; truncated: boolean; cacheHin
 export type PlaylistDetail = { playlist: Playlist; tracks: Track[]; nextStart: number; hasMore: boolean; cacheHint?: string; cached?: boolean; cachedAt?: number };
 export type SearchPage = { tracks: Track[]; nextStart: number; hasMore: boolean; total?: number };
 export type HistoryPage = { tracks: Track[] };
-export type LyricsLine = { timeMs: number | null; text: string };
+export type LyricSegment = { timeMs: number | null; text: string };
+export type LyricsLine = {
+  timeMs: number | null;
+  text: string;
+  // Second line sharing this exact timestamp (bilingual LRC layout).
+  translation?: string;
+  // Word level marks from <mm:ss.xx> tags, when the source provides them.
+  segments?: LyricSegment[];
+};
 export type LyricsDoc = { synced: boolean; lines: LyricsLine[] };
 export type AlbumDetail = {
   album: { id: string; title: string; coverUrl?: string; count?: number; artists: { id?: string; name: string }[] };
@@ -65,6 +73,19 @@ export type Playback = {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 export type Quality = 'standard' | 'lossless';
+export type AccentName = 'red' | 'blue' | 'green' | 'amber' | 'violet';
+export type FontChoice = 'sans' | 'serif' | 'mono';
+
+export type AppearanceSettings = {
+  accent: AccentName;
+  /** 0.55 – 1: how solid the floating glass panels are. */
+  panelOpacity: number;
+  /** Base corner radius in px; every component radius derives from it. */
+  cornerRadius: number;
+  /** 0.85 – 1.2 multiplier applied to all text sizes. */
+  fontScale: number;
+  fontFamily: FontChoice;
+};
 
 export type AppSettings = {
   closeBehavior: 'quit' | 'tray';
@@ -72,6 +93,7 @@ export type AppSettings = {
   volume: number;
   repeatMode: RepeatMode;
   shuffle: boolean;
+  appearance: AppearanceSettings;
   // Report real playback to Huawei history. Endpoint shape comes from the public H5 bundle;
   // real-account acceptance is still pending, so failures stay silent and are never retried.
   syncHistory: boolean;

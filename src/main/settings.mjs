@@ -7,12 +7,39 @@ export const DEFAULT_SETTINGS = Object.freeze({
   repeatMode: 'off',
   shuffle: false,
   syncHistory: true,
+  appearance: Object.freeze({
+    accent: 'red',
+    panelOpacity: 1,
+    cornerRadius: 11,
+    fontScale: 1,
+    fontFamily: 'sans',
+  }),
 });
 
 import { isSafeResourceUrl } from '../safe-media-url.mjs';
 const CLOSE_BEHAVIORS = new Set(['quit', 'tray']);
 const QUALITIES = new Set(['standard', 'lossless']);
 const REPEAT_MODES = new Set(['off', 'all', 'one']);
+const ACCENTS = new Set(['red', 'blue', 'green', 'amber', 'violet']);
+const FONT_CHOICES = new Set(['sans', 'serif', 'mono']);
+
+function clampNumber(value, min, max, fallback) {
+  return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
+}
+
+/** @returns {import('../shared/types').AppearanceSettings} */
+export function sanitizeAppearance(input, fallback = DEFAULT_SETTINGS.appearance) {
+  const base = { ...DEFAULT_SETTINGS.appearance, ...(fallback ?? {}) };
+  if (!input || typeof input !== 'object') return base;
+  const raw = /** @type {Record<string, unknown>} */ (input);
+  return {
+    accent: ACCENTS.has(raw.accent) ? /** @type {import('../shared/types').AccentName} */ (raw.accent) : base.accent,
+    panelOpacity: clampNumber(raw.panelOpacity, 0.55, 1, base.panelOpacity),
+    cornerRadius: clampNumber(raw.cornerRadius, 0, 18, base.cornerRadius),
+    fontScale: clampNumber(raw.fontScale, 0.85, 1.2, base.fontScale),
+    fontFamily: FONT_CHOICES.has(raw.fontFamily) ? /** @type {import('../shared/types').FontChoice} */ (raw.fontFamily) : base.fontFamily,
+  };
+}
 
 /**
  * @template {import('../shared/types').AppSettings} T
@@ -32,6 +59,9 @@ export function sanitizeSettings(input, fallback = DEFAULT_SETTINGS) {
   if (typeof raw.syncHistory === 'boolean') next.syncHistory = raw.syncHistory;
   if (typeof raw.volume === 'number' && Number.isFinite(raw.volume)) {
     next.volume = Math.min(1, Math.max(0, raw.volume));
+  }
+  if (raw.appearance && typeof raw.appearance === 'object') {
+    next.appearance = sanitizeAppearance(raw.appearance, base.appearance);
   }
   return next;
 }

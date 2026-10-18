@@ -43,3 +43,40 @@ test('active lyric index tracks playback position and boundaries', () => {
   assert.equal(activeLyricIndex(lines, 99_000), 2);
   assert.equal(activeLyricIndex([], 5000), -1);
 });
+
+test('word level marks become segments without leaking into the line text', () => {
+  const result = parseLyrics('[00:10.00]<00:10.00>原来<00:10.60>你<00:11.20>也在这里');
+  assert.equal(result.synced, true);
+  assert.equal(result.lines[0].text, '原来你也在这里');
+  assert.deepEqual(result.lines[0].segments, [
+    { timeMs: 10_000, text: '原来' },
+    { timeMs: 10_600, text: '你' },
+    { timeMs: 11_200, text: '也在这里' },
+  ]);
+});
+
+test('a second line sharing the exact timestamp becomes a translation', () => {
+  const result = parseLyrics('[00:05.00]Hello world\n[00:05.00]你好世界\n[00:09.00]Next');
+  assert.deepEqual(result.lines.map(line => [line.timeMs, line.text, line.translation]), [
+    [5000, 'Hello world', '你好世界'],
+    [9000, 'Next', undefined],
+  ]);
+});
+
+test('identical duplicate stamps are dropped instead of faked as a translation', () => {
+  const result = parseLyrics('[00:05.00]副歌\n[00:05.00]副歌');
+  assert.deepEqual(result.lines, [{ timeMs: 5000, text: '副歌' }]);
+});
+
+test('metadata headers never become lyric lines', () => {
+  const result = parseLyrics('[ti:歌名]\n[ar:歌手]\n[al:专辑]\n[by:某人]\n[00:01.00]正文');
+  assert.deepEqual(result.lines, [{ timeMs: 1000, text: '正文' }]);
+  assert.deepEqual(parseLyrics('[ti:只有元数据]'), { synced: false, lines: [] });
+});
+
+test('word marks survive on plain text lyrics as well', () => {
+  const result = parseLyrics('<00:01.00>逐字\n<00:02.00>纯文本');
+  assert.equal(result.synced, false);
+  assert.deepEqual(result.lines.map(line => line.text), ['逐字', '纯文本']);
+  assert.equal(result.lines[0].segments[0].timeMs, 1000);
+});

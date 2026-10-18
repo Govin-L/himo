@@ -5,28 +5,21 @@ import { build, Platform, Arch } from 'electron-builder';
 const target = process.argv[2] ?? ({ win32: 'win', darwin: 'mac', linux: 'linux' }[process.platform]);
 const architecture = process.argv[3] ?? (target === 'mac' ? process.arch : 'x64');
 const format = process.argv[4];
-const portable = target === 'win' && format === 'portable';
-if (!['win', 'mac', 'linux'].includes(target) || !['x64', 'arm64'].includes(architecture)
-  || (format !== undefined && !portable)) {
-  throw new Error('Usage: npm run dist -- <win|linux|mac> <x64|arm64> [portable (Windows only)]');
+if (!['win', 'mac', 'linux'].includes(target) || !['x64', 'arm64'].includes(architecture) || format !== undefined) {
+  throw new Error('Usage: npm run dist -- <win|linux|mac> <x64|arm64>');
 }
 const nativePlatform = { win: 'win32', mac: 'darwin', linux: 'linux' }[target];
-if (process.platform !== nativePlatform && !portable) throw new Error(`Build ${target} on its native OS, or use dist:win:portable for an unsigned cross-build without Wine.`);
+// Windows installers are only produced on a real Windows host: the NSIS toolchain needs its own
+// resource editor and we do not ship an unsigned single-file portable fallback any more.
+if (process.platform !== nativePlatform) throw new Error(`Build ${target} on its native OS (${nativePlatform}).`);
 if (target !== 'mac' && architecture !== 'x64') throw new Error('The first release only targets Windows/Linux x64.');
 const npm = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const result = spawnSync(npm, ['run', 'build'], { stdio: 'inherit', shell: process.platform === 'win32' });
 if (result.status !== 0) process.exit(result.status ?? 1);
-const config = { directories: { output: `release/${target}-${architecture}${portable ? '-portable' : ''}` } };
-const names = target === 'win' ? [portable ? 'portable' : 'nsis'] : target === 'mac' ? ['dmg'] : ['AppImage'];
-if (portable) {
-  // Portable uses an embedded payload and no uninstaller. Resource editing is pure JS in the
-  // pinned builder; explicitly skip signing so no identity or Wine toolchain is required.
+const config = { directories: { output: `release/${target}-${architecture}` } };
+const names = target === 'win' ? ['nsis'] : target === 'mac' ? ['dmg'] : ['AppImage'];
+if (target === 'win') {
   config.win = { signExecutable: false, forceCodeSigning: false, requestedExecutionLevel: 'asInvoker' };
-  config.portable = {
-    artifactName: '${name}-${version}-win-${arch}-portable-internal.exe',
-    requestExecutionLevel: 'user',
-    unpackDirName: true,
-  };
 }
 if (target === 'linux') {
   const homepage = process.env.DESKTOP_BUILD_HOMEPAGE;

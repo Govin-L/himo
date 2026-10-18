@@ -12,9 +12,10 @@ import { getPath7za } from 'app-builder-lib/out/toolsets/7zip.js';
 const require = createRequire(import.meta.url);
 const asar = require('@electron/asar');
 const supplied = process.argv[2];
-if (!supplied || !supplied.endsWith('.exe')) throw new Error('Pass the single-file portable EXE path.');
+if (!supplied || !supplied.endsWith('.exe')) throw new Error('Pass the Windows installer EXE path.');
 const artifact = resolve(supplied);
-const root = await mkdtemp(join(tmpdir(), 'huawei-portable-inspect-'));
+if (/portable/i.test(basename(artifact))) throw new Error('The single-file portable build has been retired; pass the NSIS installer instead.');
+const root = await mkdtemp(join(tmpdir(), 'huawei-installer-inspect-'));
 const sevenZip = await getPath7za();
 const forbidden = /(^|\/)(\.local|research|docs|test|scripts|src|design-previews|\.git)(\/|$)/;
 
@@ -106,7 +107,7 @@ function peHeader(bytes) {
   return { machine: bytes.readUInt16LE(offset + 4), signed: bytes.readUInt32LE(certificateDirectory) !== 0 };
 }
 try {
-  // 7-Zip flattens this NSIS portable payload on Windows while Linux keeps $PLUGINSDIR/app-64.7z,
+  // 7-Zip flattens this NSIS payload on Windows while Linux keeps $PLUGINSDIR/app-64.7z,
   // so locate the application files whichever layout the extractor produced.
   const outerLog = extract(artifact, join(root, 'wrapper'));
   const wrapperListing = await readdir(join(root, 'wrapper'));
@@ -121,12 +122,13 @@ try {
     appRoot = join(root, 'app');
   }
   const payload = await walkFiles(appRoot);
-  assert.equal(payload.some(path => /uninstall/i.test(path)), false, 'portable unexpectedly contains an uninstaller');
+  // An installer normally carries its uninstaller alongside the application.
+  assert.ok(payload.length > 10, 'installer payload looks empty');
   // The executable name follows build.productName, so discover it instead of hardcoding it.
   const appExe = payload.find(path => !path.includes('/') && /\.exe$/i.test(path));
   assert.ok(appExe, `no top-level application executable in payload: ${JSON.stringify(payload.slice(0, 5))}`);
   assert.ok(payload.includes('resources/app.asar'));
-  assert.deepEqual(payload.filter(path => /(^|\/)(session\.enc|session\.json|settings\.json|queue\.json|cache\.json|history\.json)$/.test(path)), [], 'user data in portable');
+  assert.deepEqual(payload.filter(path => /(^|\/)(session\.enc|session\.json|settings\.json|queue\.json|cache\.json|history\.json)$/.test(path)), [], 'user data inside the installer');
   const archive = join(appRoot, 'resources', 'app.asar');
   const unpackedArchive = join(dirname(artifact), 'win-unpacked', 'resources', 'app.asar');
   assert.equal(hash(await readFile(archive)), hash(await readFile(unpackedArchive)), 'embedded app differs from the unpacked build');
@@ -146,6 +148,9 @@ try {
   const appPe = peHeader(appBytes);
   const outerBytes = await readFile(artifact);
   const wrapperPe = peHeader(outerBytes);
+  // NSIS stubs are 32-bit launchers even for x64 payloads; identify the installer by its marker.
+  assert.ok(outerBytes.includes(Buffer.from('Nullsoft')) || outerBytes.includes(Buffer.from('NSIS Error')),
+    'installer wrapper is not a Nullsoft (NSIS) package');
   assert.equal(appPe.machine, 0x8664, 'application is not Windows x64');
   // The icon must be our own artwork: a brand-green rounded square with a light glyph.
   // <out>/win-unpacked/resources/app.asar -> <out>/.icon-ico/icon.ico (written by electron-builder).
@@ -177,10 +182,10 @@ try {
   assert.equal(appPe.signed, false, 'expected an explicitly unsigned internal build');
   assert.equal(wrapperPe.signed, false);
   assert.ok(appBytes.includes(Buffer.from('asInvoker')), 'application execution manifest must not request elevation');
-  console.log(JSON.stringify({ artifact: basename(artifact), applicationExecutable: appExe, bytes: (await stat(artifact)).size,
-    sha256: hash(outerBytes), singleFileWithEmbeddedApp: true, appArchitecture: 'x64',
+  console.log(JSON.stringify({ artifact: basename(artifact), kind: 'nsis-installer', applicationExecutable: appExe, bytes: (await stat(artifact)).size,
+    sha256: hash(outerBytes), installerWithEmbeddedApp: true, appArchitecture: 'x64',
     wrapperArchitecture: wrapperPe.machine === 0x14c ? 'x86 NSIS launcher (starts x64 app)' : 'other',
     unsigned: true, noPrivateDataOrSources: true, matchesCurrentBuild: true,
     iconSizes: ico.map(entry => entry.width).sort((a, b) => a - b), iconArtworkVerified: true, iconCoverage,
-    windowsRuntimeTested: false, launchSpeedAndCredentialRestore: 'not-tested' }, null, 2));
+    windowsRuntimeTested: false, installAndLaunch: 'not-tested' }, null, 2));
 } finally { await rm(root, { recursive: true, force: true }); }

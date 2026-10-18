@@ -3,7 +3,7 @@ import { session as electronSession, WebContentsView } from 'electron';
 import { electronBypassRules, proxyRules, readProxySettings } from './proxy.mjs';
 import { createAttempt, exchangeCode, exchangeMusicSession, isAllowedLoginUrl, isCallback } from '../auth.mjs';
 import { MusicClient } from '../music.mjs';
-import { isSafeMediaUrl, isSafeResourceUrl } from '../safe-media-url.mjs';
+import { isSafeMediaUrl } from '../safe-media-url.mjs';
 import { confirmedPlaybackQuality } from './track-quality.mjs';
 import { createDevToolsCallbackObserver, createLoginCallback, prepareLoginPage, waitForLoginPage } from '../login-callback.mjs';
 import {
@@ -11,7 +11,7 @@ import {
   tracksFrom, tracksFromPlaylistDetail, tracksFromPublicPlaylist,
 } from './library.mjs';
 import { parseLyrics } from '../lyrics.mjs';
-import { lyricAddressFrom, readBoundedText } from './lyric-resource.mjs';
+import { lyricAddressFrom, inlineLyricsFrom, readBoundedText } from './lyric-resource.mjs';
 import { fetch as httpFetch } from 'undici';
 import type {
   AlbumDetail, ArtistDetail, FavoritesPage, HistoryPage, LyricsDoc, Playback, Playlist, PlaylistDetail,
@@ -275,14 +275,18 @@ export async function artist(session: Session, artistId: string): Promise<Artist
 export async function lyrics(session: Session, trackId: string): Promise<LyricsDoc> {
   const response = await clientFor(session).resolvePlayback(trackId, 'standard');
   const address = lyricAddressFrom(response);
-  if (!address || !isSafeResourceUrl(address)) return { synced: false, lines: [] };
-  let text: string;
-  try {
-    const response = await httpFetch(address, { signal: AbortSignal.timeout(20_000), redirect: 'error', headers: { accept: 'text/plain,*/*' } });
-    if (!response.ok) return { synced: false, lines: [] };
-    text = await readBoundedText(response);
-  } catch { return { synced: false, lines: [] }; }
-  return parseLyrics(text) as LyricsDoc;
+  if (address) {
+    try {
+      const resource = await httpFetch(address, { signal: AbortSignal.timeout(20_000), redirect: 'error', headers: { accept: 'text/plain,*/*' } });
+      if (resource.ok) {
+        const parsed = parseLyrics(await readBoundedText(resource)) as LyricsDoc;
+        if (parsed.lines.length) return parsed;
+      }
+    } catch { /* Fall through to the inline copy, if any. */ }
+  }
+  // Some responses embed the lyric text instead of pointing at a resource address.
+  const inline = inlineLyricsFrom(response);
+  return inline ? parseLyrics(inline) as LyricsDoc : { synced: false, lines: [] };
 }
 
 export async function favoriteExist(session: Session, trackId: string): Promise<boolean> {

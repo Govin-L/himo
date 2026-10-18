@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from 'react';
-import { Headphones, LogIn, LogOut, Settings as SettingsIcon } from 'lucide-react';
-import { LyricsPanel, PlayerBar, QueuePanel } from './components';
+import {
+  Heart, Headphones, History, ListMusic, LogIn, LogOut, Search, Settings as SettingsIcon,
+} from 'lucide-react';
+import { LyricsPanel, LyricsStage, PlayerBar, QueuePanel } from './components';
 import {
   AlbumPage, ArtistPage, HistoryPage, PlaylistsPage, PlaylistDetailPage, SearchPage,
   SettingsPage, type LibraryContext,
@@ -11,7 +13,9 @@ import {
   autosaveDelay, buildShuffleOrder, historyReportDecision, onEndedAction, popPlayHistory, pushPlayHistory, stepCursor,
 } from './player.mjs';
 import { canRetryMediaFailure, reconcileTrackIndexes } from './track-reconcile.mjs';
-import type { AppSettings, AuthStatus, LyricsDoc, Playback, Playlist, Result, SavedQueue, Track } from '../shared/types';
+import type {
+  AccentName, AppSettings, AuthStatus, AppearanceSettings, FontChoice, LyricsDoc, Playback, Playlist, Result, SavedQueue, Track,
+} from '../shared/types';
 
 type View =
   | { name: 'favorites' } | { name: 'playlists' } | { name: 'search' } | { name: 'history' } | { name: 'settings' }
@@ -24,8 +28,59 @@ const VIEW_TITLES: Record<View['name'], string> = {
   history: '播放历史', settings: '设置', album: '专辑', artist: '歌手',
 };
 
+const VIEW_EYEBROWS: Record<View['name'], string> = {
+  favorites: 'Library', playlists: 'Collections', playlist: 'Collection', search: 'Search',
+  history: 'History', settings: 'Preferences', album: 'Album', artist: 'Artist',
+};
+
+const NAV_ICONS = {
+  favorites: Heart, playlists: ListMusic, search: Search, history: History, settings: SettingsIcon,
+};
+
+// Runtime tint map: the CSS keeps red as its default so the first paint is already correct.
+const ACCENTS: Record<AccentName, { accent: string; light: string; deep: string; soft: string; line: string; shadow: string }> = {
+  red: { accent: '#c8202e', light: '#e0364a', deep: '#a51724', soft: 'rgba(200, 32, 46, 0.09)', line: 'rgba(200, 32, 46, 0.28)', shadow: 'rgba(200, 32, 46, 0.28)' },
+  blue: { accent: '#2563eb', light: '#3b82f6', deep: '#1d4ed8', soft: 'rgba(37, 99, 235, 0.10)', line: 'rgba(37, 99, 235, 0.30)', shadow: 'rgba(37, 99, 235, 0.26)' },
+  green: { accent: '#15803d', light: '#22a05a', deep: '#166534', soft: 'rgba(21, 128, 61, 0.10)', line: 'rgba(21, 128, 61, 0.28)', shadow: 'rgba(21, 128, 61, 0.24)' },
+  amber: { accent: '#b45309', light: '#d97706', deep: '#92400e', soft: 'rgba(180, 83, 9, 0.11)', line: 'rgba(180, 83, 9, 0.30)', shadow: 'rgba(180, 83, 9, 0.24)' },
+  violet: { accent: '#6d28d9', light: '#8b5cf6', deep: '#5b21b6', soft: 'rgba(109, 40, 217, 0.10)', line: 'rgba(109, 40, 217, 0.28)', shadow: 'rgba(109, 40, 217, 0.24)' },
+};
+
+const FONT_STACKS: Record<FontChoice, string> = {
+  sans: "'Inter', 'Noto Sans CJK SC', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif",
+  serif: "'Noto Serif CJK SC', 'Noto Serif SC', 'Source Han Serif SC', 'AR PL UMing CN', 'Songti SC', STSong, SimSun, Georgia, serif",
+  mono: "ui-monospace, 'JetBrains Mono', 'Noto Sans Mono CJK SC', 'Sarasa Mono SC', Consolas, monospace",
+};
+
+function applyAppearance(appearance: AppearanceSettings | undefined) {
+  if (!appearance) return;
+  const root = document.documentElement.style;
+  const tint = ACCENTS[appearance.accent] ?? ACCENTS.red;
+  root.setProperty('--accent', tint.accent);
+  root.setProperty('--accent-light', tint.light);
+  root.setProperty('--accent-deep', tint.deep);
+  root.setProperty('--accent-soft', tint.soft);
+  root.setProperty('--accent-line', tint.line);
+  root.setProperty('--accent-shadow', tint.shadow);
+  root.setProperty('--panel-alpha', String(appearance.panelOpacity));
+  root.setProperty('--radius-unit', `${appearance.cornerRadius}px`);
+  root.setProperty('--fs-scale', String(appearance.fontScale));
+  root.setProperty('--font-ui', FONT_STACKS[appearance.fontFamily] ?? FONT_STACKS.sans);
+}
+
 const HISTORY_KEY = 'local-play-history';
 const HISTORY_LIMIT = 200;
+const LYRIC_OFFSET_KEY = 'lyric-offset';
+const LYRIC_OFFSET_LIMIT = 10;
+
+function readLyricOffset(trackId?: string): number {
+  try {
+    const own = Number(trackId ? localStorage.getItem(`${LYRIC_OFFSET_KEY}:${trackId}`) : null);
+    if (Number.isFinite(own) && own !== 0) return Math.max(-LYRIC_OFFSET_LIMIT, Math.min(LYRIC_OFFSET_LIMIT, own));
+    const shared = Number(localStorage.getItem(LYRIC_OFFSET_KEY));
+    return Number.isFinite(shared) ? Math.max(-LYRIC_OFFSET_LIMIT, Math.min(LYRIC_OFFSET_LIMIT, shared)) : 0;
+  } catch { return 0; }
+}
 
 function readLocalHistory(): Track[] {
   try {
@@ -51,6 +106,10 @@ export function App() {
   const [actualQuality, setActualQuality] = useState<'standard' | 'lossless' | 'unknown'>('unknown');
   const [lyrics, setLyrics] = useState<LyricsDoc | null>(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [lyricsLoading, setLyricsLoading] = useState(false);
+  const [stageOpen, setStageOpen] = useState(false);
+  const [lyricOffset, setLyricOffset] = useState(0);
+  const lyricCache = useRef(new Map<string, LyricsDoc | null>());
   const [queueOpen, setQueueOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
   const [knownFavoriteIds, setKnownFavoriteIds] = useState<Set<string>>(new Set());
@@ -219,6 +278,8 @@ export function App() {
 
   useEffect(() => { if (audio.current) audio.current.volume = volume; }, [volume]);
 
+  useEffect(() => { applyAppearance(settings?.appearance); }, [settings?.appearance]);
+
   // Persist the queue without any playback URL; the renderer only stores what the IPC accepts.
   function persistQueue() {
     lastSaveAt.current = Date.now();
@@ -265,16 +326,31 @@ export function App() {
     } catch { /* Position state is best effort. */ }
   }, [position, duration]);
 
+  // Lyrics load once per track while either surface (drawer or full stage) is visible.
   useEffect(() => {
-    if (!lyricsOpen) return;
-    const track = queue[order.current[cursor]];
-    if (!track) { setLyrics(null); return; }
+    if (!lyricsOpen && !stageOpen) return;
+    const trackId = currentTrack?.id;
+    if (!trackId) { setLyrics(null); return; }
+    setLyricOffset(readLyricOffset(trackId));
+    if (lyricCache.current.has(trackId)) {
+      setLyrics(lyricCache.current.get(trackId) ?? null);
+      setLyricsLoading(false);
+      return;
+    }
     let cancelled = false;
-    void window.desktop.music.lyrics({ trackId: track.id }).then(result => {
-      if (!cancelled) setLyrics(result.ok ? result.data : null);
-    }).catch(() => { if (!cancelled) setLyrics(null); });
+    setLyrics(null); setLyricsLoading(true);
+    void window.desktop.music.lyrics({ trackId }).then(result => {
+      if (cancelled) return;
+      const doc = result.ok ? result.data : null;
+      lyricCache.current.set(trackId, doc);
+      setLyrics(doc); setLyricsLoading(false);
+    }).catch(() => {
+      if (cancelled) return;
+      lyricCache.current.set(trackId, null);
+      setLyrics(null); setLyricsLoading(false);
+    });
     return () => { cancelled = true; };
-  }, [lyricsOpen, currentTrack?.id]);
+  }, [lyricsOpen, stageOpen, currentTrack?.id]);
 
   function applySettings(next: AppSettings) {
     setSettings(next);
@@ -417,6 +493,29 @@ export function App() {
     if (target !== null && audio.current && duration > 0) audio.current.currentTime = Math.min(target, duration);
   }
 
+  // Jumping audio directly (lyric line clicks, stage scrubber) bypasses the preview/commit dance.
+  function seekAudio(seconds: number) {
+    if (!audio.current || !duration) return;
+    const target = Math.max(0, Math.min(seconds, duration));
+    seeking.current = false;
+    seekTarget.current = null;
+    audio.current.currentTime = target;
+    lastListenAt.current = target;
+    setPosition(target);
+  }
+  function seekToLyric(timeMs: number) { seekAudio(timeMs / 1000 - lyricOffset); }
+
+  // Offset is a per-track preference; the shared value seeds the next unheard track.
+  function changeLyricOffset(delta: number) {
+    const next = Math.max(-LYRIC_OFFSET_LIMIT, Math.min(LYRIC_OFFSET_LIMIT, Math.round((lyricOffset + delta) * 10) / 10));
+    setLyricOffset(next);
+    try {
+      const trackId = currentTrack?.id;
+      if (trackId) localStorage.setItem(`${LYRIC_OFFSET_KEY}:${trackId}`, String(next));
+      localStorage.setItem(LYRIC_OFFSET_KEY, String(next));
+    } catch { /* Preference storage is best effort. */ }
+  }
+
   async function updateSettings(patch: Partial<AppSettings>) {
     const result = await window.desktop.settings.update(patch).catch(() => null);
     if (result?.ok) {
@@ -459,9 +558,14 @@ export function App() {
     void updateSettings({ quality: next });
     setMessage(next === 'lossless' ? '已切换为无损（下次取链生效）。' : '已切换为标准音质。');
   }
+  const lastAudibleVolume = useRef(0.85);
   function changeVolume(value: number) {
+    if (value > 0) lastAudibleVolume.current = value;
     setVolume(value); volumeRef.current = value;
     void window.desktop.settings.update({ volume: value }).catch(() => undefined);
+  }
+  function toggleMute() {
+    changeVolume(volume > 0 ? 0 : (lastAudibleVolume.current || 0.85));
   }
 
   function favoriteOf(trackId: string): boolean | undefined { return knownFavoriteIds.has(trackId) ? favoriteIds.has(trackId) : undefined; }
@@ -573,7 +677,7 @@ export function App() {
     localHistory, favoriteChange,
   };
 
-  const navItems: { key: View['name']; label: string }[] = [
+  const navItems: { key: keyof typeof NAV_ICONS; label: string }[] = [
     { key: 'favorites', label: '我的收藏' },
     { key: 'playlists', label: '我的歌单' },
     { key: 'search', label: '搜索' },
@@ -595,31 +699,54 @@ export function App() {
   }
 
   const panelOpen = lyricsOpen || queueOpen;
+  const viewHint =
+    view.name === 'favorites' ? '收藏的全部歌曲，向下滚动自动加载'
+      : view.name === 'playlists' ? '自建、收藏与榜单'
+        : view.name === 'search' ? '按歌名或艺人查找'
+          : view.name === 'history' ? '本机记录与华为服务端记录'
+            : view.name === 'settings' ? '播放、界面与隐私偏好'
+              : '';
   return <div className={`app-shell ${panelOpen ? 'has-panel' : ''}`}>
     <aside className="sidebar">
-      <div className="brand"><span className="brand-mark"><Headphones size={19} /></span><span>{APP_BRAND_LABEL}</span></div>
+      <div className="brand">
+        <span className="brand-mark"><Headphones size={19} /></span>
+        <span>{APP_BRAND_LABEL}</span>
+      </div>
       <div className="nav-label">音乐库</div>
-      {navItems.map(item => <button key={item.key}
-        className={`nav-item ${view.name === item.key || (item.key === 'playlists' && view.name === 'playlist') ? 'active' : ''}`}
-        onClick={() => setView({ name: item.key } as View)}>{item.label}</button>)}
-      <div className="sidebar-foot"><div className="status-dot" /> {status?.authenticated ? '音乐会话已连接' : '未登录'}</div>
+      {navItems.map(item => {
+        const Icon = NAV_ICONS[item.key];
+        return <button key={item.key}
+          className={`nav-item ${view.name === item.key || (item.key === 'playlists' && view.name === 'playlist') ? 'active' : ''}`}
+          title={item.label}
+          onClick={() => setView({ name: item.key } as View)}>
+          <Icon size={16} /><span>{item.label}</span>
+        </button>;
+      })}
+      <div className="sidebar-foot">
+        <div className={`status-dot ${status?.authenticated ? '' : 'off'}`} />
+        <span>{status?.authenticated ? '音乐会话已连接' : '未登录'}</span>
+      </div>
     </aside>
     <main className="main-content">
       <header className="topbar">
-        <div><p className="eyebrow">PERSONAL LIBRARY</p><h1>{VIEW_TITLES[view.name]}</h1></div>
+        <div>
+          <p className="eyebrow">{VIEW_EYEBROWS[view.name]}</p>
+          <h1>{VIEW_TITLES[view.name]}</h1>
+          <p className="page-sub">{status?.authenticated || view.name === 'settings' ? viewHint : '登录后即可浏览你的音乐库'}</p>
+        </div>
         <div className="actions">
           {status?.authenticated
             ? <>
-              <button className="ghost" onClick={login} disabled={busy}><LogIn size={16} />重新登录</button>
-              <button className="ghost danger" onClick={logout} disabled={busy}><LogOut size={16} />退出</button>
+              <button className="ghost" onClick={login} disabled={busy}><LogIn size={14} />重新登录</button>
+              <button className="ghost danger" onClick={logout} disabled={busy}><LogOut size={14} />退出</button>
             </>
-            : <button className="primary" onClick={login} disabled={busy}><LogIn size={16} />扫码登录</button>}
+            : <button className="primary" onClick={login} disabled={busy}><LogIn size={14} />扫码登录</button>}
         </div>
       </header>
       <div className="notice" role="status" aria-live="polite">{message}{status?.notice && <span> · {status.notice}</span>}</div>
       {!status?.authenticated && view.name !== 'settings'
         ? <section className="empty-state">
-          <div className="empty-art"><Headphones size={36} /></div>
+          <div className="empty-art"><Headphones size={30} /></div>
           <h2>连接你的音乐库</h2>
           <p>通过华为官方页面扫码登录。授权页使用公开兼容性研究中的 OAuth 应用标识，并非本项目注册身份；请先核对页面显示的应用和权限，再决定是否继续。账号令牌只在主进程处理。</p>
           <button className="primary large" onClick={login} disabled={busy}>打开官方登录</button>
@@ -631,8 +758,33 @@ export function App() {
       <span>正在官方页面完成扫码授权，完成后自动返回。</span>
       <button className="ghost" onClick={() => void cancelLogin()}>取消登录</button>
     </div>}
-    {lyricsOpen && <LyricsPanel doc={lyrics} positionSeconds={position} onClose={() => setLyricsOpen(false)} />}
+    {lyricsOpen && <LyricsPanel
+      doc={lyrics}
+      loading={lyricsLoading}
+      positionSeconds={position}
+      offsetSeconds={lyricOffset}
+      onSeekTo={seekToLyric}
+      onOpenStage={() => setStageOpen(true)}
+      onClose={() => setLyricsOpen(false)}
+    />}
     {queueOpen && <QueuePanel tracks={queue} currentId={currentTrack?.id ?? null} onSelect={queueIndex => { const at = order.current.indexOf(queueIndex); void playAt(at < 0 ? 0 : at); }} onClose={() => setQueueOpen(false)} />}
+    {stageOpen && <LyricsStage
+      track={currentTrack}
+      doc={lyrics}
+      loading={lyricsLoading}
+      positionSeconds={position}
+      offsetSeconds={lyricOffset}
+      playing={playing}
+      duration={duration}
+      disabled={!queue.length}
+      onSeekTo={seekToLyric}
+      onSeekSeconds={seekAudio}
+      onToggle={togglePlayback}
+      onPrevious={goPrevious}
+      onNext={goNext}
+      onOffset={changeLyricOffset}
+      onClose={() => setStageOpen(false)}
+    />}
     <PlayerBar
       track={currentTrack}
       playing={playing}
@@ -651,11 +803,13 @@ export function App() {
       onSeekPreview={previewSeek}
       onSeekCommit={commitSeek}
       onVolume={changeVolume}
+      onToggleMute={toggleMute}
       onToggleQuality={toggleQuality}
       onToggleRepeat={toggleRepeat}
       onToggleShuffle={toggleShuffle}
       onToggleLyrics={() => setLyricsOpen(value => { if (!value) setQueueOpen(false); return !value; })}
       onToggleQueue={() => setQueueOpen(value => { if (!value) setLyricsOpen(false); return !value; })}
+      onOpenStage={() => setStageOpen(true)}
       lyricsOpen={lyricsOpen}
       queueOpen={queueOpen}
       queueCount={queue.length}

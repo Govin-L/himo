@@ -302,6 +302,24 @@ try {
   await page.waitForFunction(() => document.querySelector('input[aria-label="同步播放到华为历史"]')?.checked === true);
   assert.equal(JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.syncHistory, true);
 
+  // Appearance is a second-level settings panel: theme colour, geometry and type repaint live and persist.
+  await page.locator('.settings-nav-item', { hasText: '外观' }).click();
+  await page.getByRole('button', { name: '主题色 靛蓝' }).click();
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#2563eb');
+  const radiusSlider = page.getByRole('slider', { name: '圆角' });
+  await radiusSlider.focus();
+  await radiusSlider.press('ArrowLeft');
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--radius-unit').trim() === '10px');
+  await page.getByRole('button', { name: '衬线', exact: true }).click();
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--font-ui').includes('Noto Serif'));
+  const appearance = JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.appearance;
+  assert.deepEqual(appearance, { accent: 'blue', panelOpacity: 1, cornerRadius: 10, fontScale: 1, fontFamily: 'serif' });
+  await page.getByRole('button', { name: '恢复默认外观' }).click();
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#c8202e');
+  assert.deepEqual(JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.appearance,
+    { accent: 'red', panelOpacity: 1, cornerRadius: 11, fontScale: 1, fontFamily: 'sans' });
+  await page.locator('.settings-nav-item', { hasText: '播放' }).click();
+
   // Actual Electron geometry: player and navigation stay in the viewport at the minimum window.
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(960, 640));
   await page.waitForTimeout(200);

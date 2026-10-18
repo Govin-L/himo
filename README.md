@@ -26,26 +26,26 @@
 | 官方扫码登录、OAuth 回调、音乐会话 | 已在真实账号实测 | 本人扫码走完 CAS → OAuth → 音乐会话；登录页嵌入主窗口，远程页无 Node/preload/业务 IPC，取消与错误 state 的回归测试通过 |
 | 凭据保存 | 部分验证 | 主进程 `safeStorage` 只存最小音乐会话；系统后端不可用或 Linux `basic_text` 时**只保留内存会话并提示**，不静默降级明文。真实系统密钥环下的跨进程恢复尚未验收 |
 | 收藏 / 歌单 / 搜索 / 专辑 / 歌手 / 历史 | 已实现并回归 | 收藏支持总数统计与滚动分页；歌单 5 分钟进程内缓存，可手动刷新；真实账号只验证过首屏 50 首，完整 960+ 未逐页点验 |
-| 播放器 | 已实现并回归 | 单 `Audio` 实例、队列、暂停/上下曲/拖动进度/音量、顺序·列表循环·单曲循环·随机播放、行级歌词、音质选择；本地 MP3/FLAC 播放·seek·播完通过 |
+| 播放器 | 已实现并回归 | 单 `Audio` 实例、队列、暂停/上下曲/拖动进度/音量、顺序·列表循环·单曲循环·随机播放、行级歌词与沉浸歌词页（切句、翻译、词级高亮、偏移）、音质选择；本地 MP3/FLAC 播放·seek·播完通过 |
 | 华为音源真实播放 | **未验收** | 需要真实会员资源的 Electron 全曲播放证据，目前只有协议层与合成音频证据 |
 | 写操作（收藏、建歌单、改简介、删自建歌单） | 协议层已实测，桌面路径未验收 | 写操作在主进程做归属校验、串行化、写后读回；不会盲重试 |
 | 播放历史同步 | 代码已写，**未验证** | 按公开 H5 形态上报，达到收听阈值才报一次、秒数为实际收听、失败静默；真实账号效果未确认 |
 | 托盘 / 关闭行为 / 媒体键 | 已实现 | Windows/macOS 真机与物理媒体键未验收 |
-| 三端安装包 | 仅 Linux 已验证 | Linux AppImage 已构建并启动验证；Windows 便携版可在 CI 原生构建但未真机运行；macOS 未构建 |
+| 三端安装包 | 仅 Linux 已验证 | Linux AppImage 已构建并启动验证；Windows NSIS 安装包由 CI 原生构建（未在 Windows 真机运行/安装）；macOS 未构建 |
 
 更细的进度与证据见 [实现状态](docs/IMPLEMENTATION_STATUS.md)。
 
 ## 截图
 
-> 截图中的数据是**离线合成测试数据**（Smoke MP3 / 测试收藏 0001…），不是任何人的真实音乐库。当前是基础视觉，正式视觉方向尚未确定。
+> 截图中的数据是**离线合成测试数据**，不是任何人的真实音乐库。截图来自 Linux Electron 实际渲染。
 
-| 音乐库与播放栏 | 设置 |
+| 音乐库与播放栏 | 设置（二级分类 + 外观） |
 |---|---|
 | ![收藏列表与播放栏](docs/assets/library.png) | ![设置页](docs/assets/settings.png) |
 
-收藏总数与滚动分页（965 首合成数据）：
-
-![收藏总数](docs/assets/favorites-total.png)
+| 沉浸歌词（封面 + 居中歌词） | 收藏总数与滚动分页（965 首合成数据） |
+|---|---|
+| ![沉浸歌词](docs/assets/lyrics.png) | ![收藏总数](docs/assets/favorites-total.png) |
 
 ## 快速开始
 
@@ -69,14 +69,15 @@ npm start
 
 - 登录：官方页面扫码、取消登录、退出账号；会话失效时提示重新登录。
 - 音乐库：收藏（总数 + 滚动分页）、我的歌单与详情、搜索歌曲、专辑与歌手详情、华为播放历史（只读）。
-- 播放：单实例播放器、队列（可持久化，不保存播放地址）、进度拖动、音量、顺序/列表循环/单曲循环/随机播放、行级歌词、标准/无损选择（按服务端实际返回展示，不虚标）。
+- 外观：主题色（5 种）、面板透明度、圆角、字号、字体（无衬线/宋体/等宽）可在「设置 → 外观」调整，立即生效并随设置持久化；歌词页有沉浸式全屏视图。
+- 播放：单实例播放器、队列（可持久化，不保存播放地址）、进度拖动、音量与静音、顺序/列表循环/单曲循环/随机播放、行级歌词、标准/无损选择（按服务端实际返回展示，不虚标）。歌词支持句级高亮、点击跳转、双语翻译并排、词级逐字高亮（源文件提供时），以及全屏沉浸页与按曲记忆的 ±0.5s 时间轴校正。
 - 写操作：收藏增删、创建自建歌单、修改简介、删除自建歌单（仅对当前账号已确认的 `owned` 歌单）。
 - 系统集成：托盘与关闭行为设置、系统媒体控制、媒体键。
 - 其它：离线只读缓存（网络失败时显示并标注“可能不是最新”）、本机播放记录与华为历史分开显示。
 
 **明确不做**（首版非目标）
 
-每日推荐、私人 FM、离线下载、音频解密、Audio Vivid / 空间音频、Hi-Res 承诺、无缝播放与交叉淡化、均衡器、逐字歌词、桌面歌词窗、移动端、云同步、自动更新服务、其它平台音源。
+每日推荐、私人 FM、离线下载、音频解密、Audio Vivid / 空间音频、Hi-Res 承诺、无缝播放与交叉淡化、均衡器、独立桌面歌词浮窗、单文件免安装版、移动端、云同步、自动更新服务、其它平台音源。
 
 ## 构建与打包
 
@@ -88,17 +89,17 @@ npm start
 npm run build          # typecheck + electron-vite build → out/{main,preload,renderer}
 ```
 
-### 2. Windows：单文件免安装便携版
+### 2. Windows：NSIS 安装包
 
 ```sh
-npm run dist:win:portable        # → release/win-x64-portable/*.exe
+npm run dist:win                 # → release/win-x64/*.exe（NSIS 安装包）
 ```
 
-- 产物是**一个 EXE**：双击即可运行，不需要预装 Node.js，不弹安装向导、不写注册表、不注册系统协议。
-- 启动时会把程序解压到临时目录并在退出时清理；**用户数据不在这里**，所以换新版本或重新解压不会丢设置与登录状态（见[数据与隐私](#数据与隐私)）。代价是每次启动多一次解压，实际耗时未在 Windows 上测量。
-- 该构建**不需要 Wine**，在 Linux 上也能交叉产出；但交叉构建与原生 Windows 构建的字节不同，两者都通过同一套静态校验（`npm run test:windows-portable -- <exe>`：PE 架构、无私人目录、图标像素、与当前 `out/` 一致）。
+- 产物是 NSIS 安装程序：双击进入安装向导，可自选安装目录；不创建桌面快捷方式，从开始菜单启动。
+- 必须在**原生 Windows** 上构建：安装包的资源编辑与图标工具链依赖 Windows。项目不再提供单文件免安装便携版，也没有 Linux 交叉构建的 Windows 产物。
+- 静态校验：`npm run test:windows-installer -- <setup.exe>`，检查 NSIS 标记、内嵌 x64 应用、无私人目录/源码、图标像素，以及与当前 `out/` 逐文件一致。校验不执行安装程序。
 - **未签名**：可能被 SmartScreen 或企业策略拦截，请自行核对 SHA-256，不要为此关闭系统安全防护。
-- 需要 NSIS 安装包时用 `npm run dist:win`，必须在原生 Windows 上执行。
+- 卸载通过“应用和功能”完成，默认保留用户数据；覆盖安装不会清空设置、队列与登录状态。
 
 ### 3. Linux：AppImage（可选 deb）
 
@@ -137,13 +138,13 @@ node scripts/release-checksums.mjs release/<dir>   # 生成 SHA256SUMS（不自�
 
 ## 持续集成（GitHub Actions）
 
-工作流：[`.github/workflows/windows-portable.yml`](.github/workflows/windows-portable.yml)，在 **windows-latest** 上原生构建 Windows 便携版。
+工作流：[`.github/workflows/windows-installer.yml`](.github/workflows/windows-installer.yml)，在 **windows-latest** 上原生构建 Windows 安装包。
 
-- 步骤：`npm ci` → 单元测试 → `dist:win:portable` → 静态校验 → `SHA256SUMS`。
-- 触发：仅在 Actions 页面手动运行（可勾选 `smoke`），或推送 `v*` 标签；不随 push 自动执行。
-- **产物发布到 GitHub Release**：手动运行（`release` 默认勾选）或推送 `v*` 标签时，会把 exe 与 `SHA256SUMS` 附到对应标签的 Release（标签不存在则按 `package.json` 版本创建；标签与版本不一致直接失败）。发布说明会写明未签名、非官方、OAuth 身份不属于本项目等事项。不发 Release 的运行才回退到 Actions artifact（3 天）。
+- 步骤：`npm ci` → 单元测试 → `dist:win` → 安装包静态校验 → `SHA256SUMS`。
+- 触发：推送到 `main`（自动构建并刷新 Release）、推送 `v*` 标签，或从 Actions 页面手动运行（可勾选 `smoke`）。
+- **产物发布到 GitHub Release**：推送 `main`、推送 `v*` 标签或手动运行（`release` 默认勾选）时，会把 exe 与 `SHA256SUMS` 附到对应 Release（`main` 构建使用 `v<package.json 版本>`，已有资产会被覆盖；标签与版本不一致直接失败）。发布说明会写明未签名、非官方、OAuth 身份不属于本项目等事项。只有手动取消发布时才回退到 Actions artifact（3 天）。
 - 可选的 `smoke` 会在 Windows 上额外跑一次 Electron 烟测（步骤内 `choco install ffmpeg` 造音频夹具）；它失败不阻断构建，但会在日志中报错。
-- Fork 后可直接复用，无需任何密钥（工作流只申请 `contents: read`）。
+- Fork 后可直接复用，无需任何密钥（工作流使用仓库自带的 `GITHUB_TOKEN`，权限为 `contents: write` 以便发布 Release）。
 - 本项目**不会**自动上传到对象存储或任何第三方分发渠道；需要二进制请按上一节在本地自行构建。
 
 ## 测试

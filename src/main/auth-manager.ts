@@ -174,7 +174,15 @@ export class AuthManager {
     return this.#sessionRequest(() => artist(this.session!, artistId), '账号状态已更改，请重新读取歌手。');
   }
   async getLyrics(trackId: string): Promise<Result<LyricsDoc>> {
-    return this.#sessionRequest(() => lyrics(this.session!, trackId), '账号状态已更改，请重新读取歌词。');
+    // Reopening the lyric surfaces for a track that is already playing must not re-resolve a
+    // playback URL and re-download the LRC. Empty documents are cached too, so "no lyrics"
+    // does not hammer the provider; the cache dies with the account and the process.
+    const key = `lyrics:${trackId}`;
+    const hit = this.memory.get(key);
+    if (hit) return ok(hit.data as LyricsDoc);
+    const result = await this.#sessionRequest(() => lyrics(this.session!, trackId), '账号状态已更改，请重新读取歌词。');
+    if (result.ok) this.memory.set(key, result.data);
+    return result;
   }
   async getFavoriteState(trackId: string): Promise<Result<{ favorite: boolean }>> {
     return this.#sessionRequest(async () => ({ favorite: await favoriteExist(this.session!, trackId) }), '账号状态已更改，请重新读取收藏状态。');
