@@ -11,6 +11,7 @@ import {
   album, artist, createPlaylist, createRecentPlay, deletePlaylist, favoriteExist, favorites, favoritesPage, history,
   lyrics, openLogin, playlistDetail, playlists, resolvePlayback, search, setFavorite, updatePlaylistDescription,
 } from './huawei';
+import { thirdPartyLyrics } from './lyrics-fallback';
 import { isTrustedRendererUrl } from './renderer-origin.mjs';
 import { errorFrom, fail, ok } from '../shared/result';
 import type {
@@ -173,15 +174,27 @@ export class AuthManager {
   async getArtist(artistId: string): Promise<Result<ArtistDetail>> {
     return this.#sessionRequest(() => artist(this.session!, artistId), '账号状态已更改，请重新读取歌手。');
   }
-  async getLyrics(trackId: string): Promise<Result<LyricsDoc>> {
+  async getLyrics(input: { trackId: string; title?: string; artist?: string; album?: string; durationSeconds?: number }, thirdParty = true): Promise<Result<LyricsDoc>> {
     // Reopening the lyric surfaces for a track that is already playing must not re-resolve a
-    // playback URL and re-download the LRC. Empty documents are cached too, so "no lyrics"
-    // does not hammer the provider; the cache dies with the account and the process.
-    const key = `lyrics:${trackId}`;
+    // playback URL and re-download the LRC. Successful documents are cached, including the
+    // third-party match, so switching between panel and stage stays offline after the first hit.
+    const key = `lyrics:${input.trackId}`;
     const hit = this.memory.get(key);
     if (hit) return ok(hit.data as LyricsDoc);
-    const result = await this.#sessionRequest(() => lyrics(this.session!, trackId), '账号状态已更改，请重新读取歌词。');
-    if (result.ok) this.memory.set(key, result.data);
+    const result = await this.#sessionRequest(() => lyrics(this.session!, input.trackId), '账号状态已更改，请重新读取歌词。');
+    if (!result.ok) return result;
+    if (result.data.lines.length) {
+      const doc = { ...result.data, source: 'huawei' as const };
+      this.memory.set(key, doc);
+      return ok(doc);
+    }
+    if (thirdParty) {
+      // A missing lyric is common; a strict title+artist+duration match decides whether the public
+      // libraries are allowed to answer. Failures are silent and left uncached so a retry can work.
+      const fallback = await thirdPartyLyrics({ title: input.title, artist: input.artist, album: input.album, durationSeconds: input.durationSeconds })
+        .catch(() => null);
+      if (fallback) { this.memory.set(key, fallback); return ok(fallback); }
+    }
     return result;
   }
   async getFavoriteState(trackId: string): Promise<Result<{ favorite: boolean }>> {

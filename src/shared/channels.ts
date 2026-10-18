@@ -21,6 +21,7 @@ export const channels = {
   musicDeletePlaylist: 'music:delete-playlist',
   settingsGet: 'settings:get',
   settingsUpdate: 'settings:update',
+  fontsList: 'fonts:list',
   queueLoad: 'queue:load',
   queueSave: 'queue:save',
   windowMinimize: 'window:minimize',

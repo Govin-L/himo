@@ -129,7 +129,7 @@ try {
     nodeProcess: typeof process,
     genericInvoke: typeof window.desktop?.invoke,
   }));
-  assert.deepEqual(boundary.apiKeys, ['app', 'auth', 'music', 'onNotice', 'player', 'queue', 'settings', 'window']);
+  assert.deepEqual(boundary.apiKeys, ['app', 'auth', 'fonts', 'music', 'onNotice', 'player', 'queue', 'settings', 'window']);
   assert.deepEqual(boundary.musicKeys, ['album', 'artist', 'createPlaylist', 'deletePlaylist', 'favoriteState', 'favorites', 'favoritesSummary', 'history', 'lyrics',
     'playlistDetail', 'playlists', 'reportPlayback', 'resolvePlayback', 'search', 'setFavorite', 'updatePlaylistDescription']);
   assert.equal(boundary.nodeProcess, 'undefined');
@@ -313,11 +313,26 @@ try {
   await page.getByRole('button', { name: '衬线', exact: true }).click();
   await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--font-ui').includes('Noto Serif'));
   const appearance = JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.appearance;
-  assert.deepEqual(appearance, { accent: 'blue', panelOpacity: 1, cornerRadius: 10, fontScale: 1, fontFamily: 'serif' });
+  assert.deepEqual(appearance, { accent: 'blue', panelOpacity: 1, cornerRadius: 10, fontScale: 1, fontFamily: 'serif', customAccent: '#c8202e', customFont: '' });
   await page.getByRole('button', { name: '恢复默认外观' }).click();
   await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#c8202e');
   assert.deepEqual(JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.appearance,
-    { accent: 'red', panelOpacity: 1, cornerRadius: 11, fontScale: 1, fontFamily: 'sans' });
+    { accent: 'red', panelOpacity: 1, cornerRadius: 11, fontScale: 1, fontFamily: 'sans', customAccent: '#c8202e', customFont: '' });
+
+  // Custom accent: the native colour input drives the same CSS variables and persists as #rrggbb.
+  await page.locator('input[aria-label="自定义主题色"]').evaluate(el => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(el, '#1F7A5A');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#1f7a5a');
+  assert.equal(JSON.parse(await readFile(join(profile, 'settings.json'), 'utf8')).data.appearance.customAccent, '#1f7a5a');
+  // Installed fonts come from the main process, and the chosen family becomes the CSS stack head.
+  const fonts = await page.evaluate(() => window.desktop.fonts.list());
+  assert.equal(fonts.ok, true, 'fonts:list must answer');
+  assert.ok(Array.isArray(fonts.data.families));
+  await page.getByRole('button', { name: '恢复默认外观' }).click();
+  await page.waitForFunction(() => getComputedStyle(document.documentElement).getPropertyValue('--accent').trim() === '#c8202e');
   await page.locator('.settings-nav-item', { hasText: '播放' }).click();
 
   // Actual Electron geometry: player and navigation stay in the viewport at the minimum window.

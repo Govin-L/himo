@@ -40,6 +40,9 @@ const api: DesktopApi = {
     load: () => ipcRenderer.invoke(channels.queueLoad),
     save: input => ipcRenderer.invoke(channels.queueSave, input),
   },
+  fonts: {
+    list: () => ipcRenderer.invoke(channels.fontsList),
+  },
   window: {
     minimize: () => ipcRenderer.invoke(channels.windowMinimize),
     setCloseBehavior: input => ipcRenderer.invoke(channels.windowSetCloseBehavior, input),

@@ -26,13 +26,15 @@ export type LibraryContext = TrackActions & {
 const PAGE = 50;
 
 // Swatch colours mirror the runtime accent map in App.tsx; only the label/swatch is used here.
-const ACCENT_SWATCHES: Record<AccentName, { label: string; swatch: string }> = {
+const ACCENT_SWATCHES: Record<Exclude<AccentName, 'custom'>, { label: string; swatch: string }> = {
   red: { label: '绯红', swatch: '#c8202e' },
   blue: { label: '靛蓝', swatch: '#2563eb' },
   green: { label: '松绿', swatch: '#15803d' },
   amber: { label: '琥珀', swatch: '#b45309' },
   violet: { label: '紫罗兰', swatch: '#6d28d9' },
 };
+
+
 
 export function PlaylistsPage({ ctx }: { ctx: LibraryContext }) {
   const requestId = useRef(0);
@@ -331,12 +333,36 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
   // IPC round-trip, otherwise fast keyboard repeats read a stale value and drop steps.
   const [draft, setDraft] = useState<AppearanceSettings | undefined>(appearance);
   useEffect(() => { setDraft(appearance); }, [appearance?.accent, appearance?.panelOpacity, appearance?.cornerRadius, appearance?.fontScale, appearance?.fontFamily]);
-  const shown = draft ?? appearance ?? { accent: 'red' as const, panelOpacity: 1, cornerRadius: 11, fontScale: 1, fontFamily: 'sans' as const };
+  const shown = draft ?? appearance ?? {
+    accent: 'red' as const, panelOpacity: 1, cornerRadius: 11, fontScale: 1, fontFamily: 'sans' as const,
+    customAccent: '#c8202e', customFont: '',
+  };
   const accent = shown.accent;
   const opacity = shown.panelOpacity;
   const radius = shown.cornerRadius;
   const fontScale = shown.fontScale;
   const fontFamily = shown.fontFamily;
+  const customAccent = shown.customAccent;
+  const customFont = shown.customFont;
+
+  // Reading installed fonts needs a user gesture and the Electron font-access permission.
+  const [systemFonts, setSystemFonts] = useState<string[]>([]);
+  const [fontQuery, setFontQuery] = useState('');
+  const [fontError, setFontError] = useState('');
+  async function loadSystemFonts() {
+    setFontError('');
+    async function attempt(): Promise<string[]> {
+      const result = await window.desktop.fonts.list().catch(() => null);
+      return result?.ok ? result.data.families : [];
+    }
+    let families = await attempt();
+    if (!families.length) families = await attempt();
+    setSystemFonts(families);
+    setFontError(families.length ? '' : '没有读到系统字体；可先使用内置字体方案。');
+  }
+  const visibleFonts = fontQuery.trim()
+    ? systemFonts.filter(name => name.toLowerCase().includes(fontQuery.trim().toLowerCase()))
+    : systemFonts;
 
   function updateAppearance(patch: Partial<AppearanceSettings>) {
     const next = { ...shown, ...patch };
@@ -393,6 +419,12 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
             onChange={event => void ctx.updateSettings({ syncHistory: event.target.checked })} />
         </label>
         <p className="hint">开启后，实际听到一定时长才会上报；快速跳过的曲目不记入华为历史，也不上报播放器未真实播放的秒数。接口形态来自公开 H5 资源，尚未用真实账号验证，失败不影响播放。</p>
+        <label>
+          <span>第三方歌词匹配</span>
+          <input type="checkbox" aria-label="第三方歌词匹配" checked={settings?.thirdPartyLyrics ?? true}
+            onChange={event => void ctx.updateSettings({ thirdPartyLyrics: event.target.checked })} />
+        </label>
+        <p className="hint">华为接口没有返回歌词时，用「歌名 + 艺人 + 时长」在酷狗音乐和 LRCLIB 严格匹配；匹配不准则保持无歌词，不会显示别的歌。只请求歌词文本，不涉及音源，也不会上传账号信息。</p>
       </div>}
 
       {tab === 'appearance' && <div className="settings-form appearance-form">
@@ -402,12 +434,17 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
             <span className="hint">播放按钮、当前曲目、高亮选中项</span>
           </div>
           <div className="accent-swatches" role="group" aria-label="主题色">
-            {(Object.keys(ACCENT_SWATCHES) as AccentName[]).map(name => <button key={name}
+            {(Object.keys(ACCENT_SWATCHES) as Exclude<AccentName, 'custom'>[]).map(name => <button key={name}
               className={`accent-swatch ${accent === name ? 'active' : ''}`}
               style={{ background: ACCENT_SWATCHES[name].swatch, color: ACCENT_SWATCHES[name].swatch }}
               aria-label={`主题色 ${ACCENT_SWATCHES[name].label}`}
               aria-pressed={accent === name}
               onClick={() => updateAppearance({ accent: name })} />)}
+            <label className={`accent-swatch accent-swatch-custom ${accent === 'custom' ? 'active' : ''}`}
+              style={{ background: customAccent, color: customAccent }} title="自定义主题色">
+              <input type="color" aria-label="自定义主题色" value={customAccent}
+                onChange={event => updateAppearance({ accent: 'custom', customAccent: event.target.value })} />
+            </label>
           </div>
         </div>
         <label className="appearance-slider">
@@ -437,7 +474,22 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
             {([['sans', '无衬线'], ['serif', '衬线'], ['mono', '等宽']] as [FontChoice, string][]).map(([key, label]) =>
               <button key={key} className={fontFamily === key ? 'active' : ''} aria-pressed={fontFamily === key}
                 onClick={() => updateAppearance({ fontFamily: key })}>{label}</button>)}
+            <button className={fontFamily === 'custom' ? 'active' : ''} aria-pressed={fontFamily === 'custom'}
+              onClick={() => void loadSystemFonts()}>系统字体…</button>
           </div>
+          {fontFamily === 'custom' && customFont && <p className="hint">当前字体：<strong>{customFont}</strong></p>}
+          {fontError && <p className="hint">{fontError}</p>}
+          {systemFonts.length > 0 && <div className="font-picker">
+            <input aria-label="搜索系统字体" placeholder={`搜索已安装字体（${systemFonts.length} 个）`} value={fontQuery}
+              onChange={event => setFontQuery(event.target.value)} />
+            <div className="font-list" role="listbox" aria-label="已安装字体">
+              {visibleFonts.length
+                ? visibleFonts.map(name => <button key={name} role="option" aria-selected={customFont === name}
+                  className={customFont === name ? 'active' : ''} style={{ fontFamily: `"${name}"` }}
+                  onClick={() => updateAppearance({ fontFamily: 'custom', customFont: name })}>{name}</button>)
+                : <p className="font-list-empty">没有匹配的字体。</p>}
+            </div>
+          </div>}
         </div>
         <button className="ghost" onClick={() => updateAppearance({ accent: 'red', panelOpacity: 1, cornerRadius: 11, fontScale: 1, fontFamily: 'sans' })}>恢复默认外观</button>
       </div>}

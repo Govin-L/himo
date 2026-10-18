@@ -252,8 +252,9 @@ select:focus-visible,
   gap: 20px;
   margin: 0 -30px 6px;
   padding: 26px 30px 16px;
-  background: linear-gradient(to bottom, rgba(246, 245, 242, 0.94) 62%, rgba(246, 245, 242, 0));
-  backdrop-filter: blur(6px);
+  background: rgba(246, 245, 242, 0.74);
+  backdrop-filter: blur(18px) saturate(1.08);
+  box-shadow: 0 1px 0 rgba(22, 24, 28, 0.04);
 }
 .topbar > div:first-child { min-width: 0; }
 .eyebrow {
@@ -888,6 +889,70 @@ select:focus-visible,
 }
 .appearance-form > .ghost { margin-top: 18px; align-self: flex-start; }
 
+/* Custom accent: the native colour input is stretched over the swatch and made invisible. */
+.accent-swatch-custom {
+  position: relative;
+  overflow: hidden;
+  cursor: pointer;
+  background-image: conic-gradient(from 210deg, #f97373, #f5c26b, #7bd88f, #6fb6f7, #b58bf5, #f97373);
+}
+.accent-swatch-custom input[type='color'] {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  padding: 0;
+  border: 0;
+  opacity: 0;
+  cursor: pointer;
+}
+.accent-swatch-custom::after {
+  content: '';
+  position: absolute;
+  inset: 5px;
+  border-radius: 50%;
+  background: inherit;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55);
+  pointer-events: none;
+}
+
+.font-picker { display: grid; gap: 8px; margin-top: 10px; }
+.font-picker > input {
+  width: 100%;
+  padding: 8px 11px;
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--line);
+  background: #fff;
+  color: var(--ink);
+  font-size: var(--fs-sm);
+}
+.font-picker > input::placeholder { color: var(--ink-4); }
+.font-list {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  max-height: 210px;
+  overflow: auto;
+  padding: 6px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.72);
+}
+.font-list button {
+  padding: 7px 9px;
+  border-radius: 7px;
+  text-align: left;
+  font-size: var(--fs-sm);
+  color: var(--ink-2);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.font-list button:hover { background: var(--hover); color: var(--ink); }
+.font-list button.active { background: var(--accent-soft); color: var(--accent-deep); font-weight: 600; }
+.font-list-empty { margin: 0; padding: 10px; font-size: var(--fs-xs); color: var(--ink-3); }
+
+
 
 /* ========================================================================== */
 /* Empty states                                                              */
@@ -1112,6 +1177,14 @@ select:focus-visible,
 }
 .stage-artist { margin: 0; font-size: var(--fs-md); color: rgba(246, 245, 242, 0.62); }
 .stage-album { margin: 7px 0 0; font-size: var(--fs-xs); color: rgba(246, 245, 242, 0.4); }
+.stage-source { margin: 10px 0 0; font-size: var(--fs-2xs); color: rgba(246, 245, 242, 0.34); }
+
+.lyric-source {
+  margin: -4px 0 10px;
+  font-size: var(--fs-2xs);
+  line-height: 1.5;
+  color: var(--ink-4);
+}
 
 .stage-lyrics-column { min-width: 0; min-height: 0; height: 100%; display: flex; }
 .stage-scroll {

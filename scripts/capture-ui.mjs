@@ -181,23 +181,57 @@ try {
   await page.getByRole('button', { name: '衬线', exact: true }).click();
   await shot('09-settings-appearance-serif.png');
   await page.getByRole('button', { name: '恢复默认外观' }).click();
+
+  // Installed fonts: queryLocalFonts() is allowed through the Electron local-fonts permission.
+  await page.getByRole('button', { name: '系统字体…' }).click();
+  const fontList = page.locator('.font-list button');
+  await page.waitForFunction(() => document.querySelectorAll('.font-list button').length > 0, { timeout: 20000 }).catch(() => undefined);
+  const fontCount = await fontList.count();
+  if (fontCount) {
+    await page.getByRole('textbox', { name: '搜索系统字体' }).fill('Sans');
+    await page.waitForTimeout(200);
+    await page.locator('.font-list').scrollIntoViewIfNeeded();
+    await shot('10-settings-system-fonts.png');
+    const target = fontList.filter({ hasText: /Noto Sans CJK|WenQuanYi|Liberation Sans|DejaVu Sans/i }).first();
+    const chosen = await target.count() ? target : fontList.first();
+    const chosenName = ((await chosen.textContent()) ?? '').trim();
+    await chosen.click();
+    await page.waitForTimeout(400);
+    await page.locator('.font-list').scrollIntoViewIfNeeded();
+    await shot('11-settings-font-applied.png');
+    console.log('font applied:', chosenName);
+  } else {
+    console.log('font list empty — queryLocalFonts unavailable');
+    await shot('10-settings-system-fonts.png');
+  }
+
+  // Custom accent through the native colour input.
+  await page.locator('input[aria-label="自定义主题色"]').evaluate(el => {
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set;
+    setter.call(el, '#1f7a5a');
+    el.dispatchEvent(new Event('input', { bubbles: true }));
+  });
+  await page.waitForTimeout(500);
+  await shot('12-settings-custom-accent.png');
+
+  await page.getByRole('button', { name: '恢复默认外观' }).click();
   await page.locator('.settings-nav-item', { hasText: '关于' }).click();
-  await shot('10-settings-about.png');
+  await shot('13-settings-about.png');
 
   await page.getByRole('button', { name: '我的收藏' }).click();
   await page.locator('.favorites-library .track-row').first().hover();
   await page.getByRole('button', { name: '播放 夜航 01' }).click();
   await page.getByRole('button', { name: '暂停' }).waitFor({ timeout: 15000 });
   await page.waitForTimeout(2400);
-  await shot('11-now-playing.png');
+  await shot('14-now-playing.png');
   await page.getByRole('button', { name: '歌词' }).click();
   await page.getByText('我在副歌里等你回头').waitFor({ timeout: 5000 });
-  await shot('12-lyrics-panel.png');
+  await shot('15-lyrics-panel.png');
   await page.getByRole('button', { name: '沉浸歌词' }).click();
-  await shot('13-lyrics-stage.png');
+  await shot('16-lyrics-stage.png');
   await page.getByRole('button', { name: '退出歌词页' }).click();
   await page.getByRole('button', { name: '播放队列' }).click();
-  await shot('14-queue.png');
+  await shot('17-queue.png');
   await page.getByRole('button', { name: '关闭' }).click();
 
   await page.getByRole('button', { name: '设置' }).click();
@@ -207,16 +241,16 @@ try {
   for (let i = 0; i < 5; i += 1) await page.getByRole('slider', { name: '圆角' }).press('ArrowRight');
   await page.getByRole('slider', { name: '面板透明度' }).focus();
   for (let i = 0; i < 5; i += 1) await page.getByRole('slider', { name: '面板透明度' }).press('ArrowLeft');
-  await shot('15-settings-appearance-blue.png');
+  await shot('18-settings-appearance-blue.png');
   await page.getByRole('button', { name: '我的收藏' }).click();
-  await shot('16-favorites-blue.png');
+  await shot('19-favorites-blue.png');
 
   await page.getByRole('button', { name: '设置' }).click();
   await page.locator('.settings-nav-item', { hasText: '外观' }).click();
   await page.getByRole('button', { name: '恢复默认外观' }).click();
   await instance.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(960, 640));
   await page.getByRole('button', { name: '我的收藏' }).click();
-  await shot('17-favorites-960.png');
+  await shot('20-favorites-960.png');
 
   console.log('screenshots written to', out);
 } finally {

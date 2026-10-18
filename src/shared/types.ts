@@ -50,7 +50,15 @@ export type LyricsLine = {
   // Word level marks from <mm:ss.xx> tags, when the source provides them.
   segments?: LyricSegment[];
 };
-export type LyricsDoc = { synced: boolean; lines: LyricsLine[] };
+export type LyricsSource = 'huawei' | 'kugou' | 'lrclib';
+export type LyricsDoc = {
+  synced: boolean;
+  lines: LyricsLine[];
+  // Which library answered, and what it matched, so the UI can be honest about third-party lyrics.
+  source?: LyricsSource;
+  matchedTitle?: string;
+  matchedArtist?: string;
+};
 export type AlbumDetail = {
   album: { id: string; title: string; coverUrl?: string; count?: number; artists: { id?: string; name: string }[] };
   tracks: Track[];
@@ -73,8 +81,8 @@ export type Playback = {
 
 export type RepeatMode = 'off' | 'all' | 'one';
 export type Quality = 'standard' | 'lossless';
-export type AccentName = 'red' | 'blue' | 'green' | 'amber' | 'violet';
-export type FontChoice = 'sans' | 'serif' | 'mono';
+export type AccentName = 'red' | 'blue' | 'green' | 'amber' | 'violet' | 'custom';
+export type FontChoice = 'sans' | 'serif' | 'mono' | 'custom';
 
 export type AppearanceSettings = {
   accent: AccentName;
@@ -85,6 +93,10 @@ export type AppearanceSettings = {
   /** 0.85 – 1.2 multiplier applied to all text sizes. */
   fontScale: number;
   fontFamily: FontChoice;
+  /** Used when accent === 'custom'; sanitized to #rrggbb. */
+  customAccent: string;
+  /** Used when fontFamily === 'custom'; an installed family name picked from queryLocalFonts(). */
+  customFont: string;
 };
 
 export type AppSettings = {
@@ -97,6 +109,8 @@ export type AppSettings = {
   // Report real playback to Huawei history. Endpoint shape comes from the public H5 bundle;
   // real-account acceptance is still pending, so failures stay silent and are never retried.
   syncHistory: boolean;
+  // Match lyrics from public third-party libraries when the provider returns none.
+  thirdPartyLyrics: boolean;
 };
 
 export type SavedQueue = {
@@ -122,7 +136,13 @@ export type DesktopApi = {
     history(): Promise<Result<HistoryPage>>;
     album(input: { id: string; start?: number; limit?: number }): Promise<Result<AlbumDetail>>;
     artist(input: { id: string }): Promise<Result<ArtistDetail>>;
-    lyrics(input: { trackId: string }): Promise<Result<LyricsDoc>>;
+    lyrics(input: {
+      trackId: string;
+      title?: string;
+      artist?: string;
+      album?: string;
+      durationSeconds?: number;
+    }): Promise<Result<LyricsDoc>>;
     resolvePlayback(input: { trackId: string; quality: 'standard' | 'lossless' }): Promise<Result<Playback>>;
     reportPlayback(input: { trackId: string; title: string; listenedSeconds: number; songDurationSeconds?: number }): Promise<Result<void>>;
     favoriteState(input: { trackId: string }): Promise<Result<{ favorite: boolean }>>;
@@ -140,6 +160,7 @@ export type DesktopApi = {
     save(input: SavedQueue): Promise<Result<void>>;
   };
   window: { minimize(): Promise<void>; setCloseBehavior(input: 'quit' | 'tray'): Promise<Result<AppSettings>> };
+  fonts: { list(): Promise<Result<{ families: string[] }>> };
   app: { quit(): Promise<void> };
   player: { onCommand(listener: (command: 'play-pause' | 'next' | 'previous') => void): () => void };
   onNotice(listener: (message: string) => void): () => void;

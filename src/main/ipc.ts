@@ -2,6 +2,7 @@ import { app, ipcMain, type BrowserWindow } from 'electron';
 import { channels } from '../shared/channels';
 import { AuthManager, isAllowedSender } from './auth-manager';
 import { loadQueue, loadSettings, saveQueue, updateSettings } from './storage';
+import { listSystemFonts } from './system-fonts';
 import { fail, ok } from '../shared/result';
 import type { SavedQueue } from '../shared/types';
 
@@ -76,11 +77,20 @@ export function registerIpc(
     if (!artistId) throw new Error('歌手参数无效');
     return auth.getArtist(artistId);
   });
-  ipcMain.handle(channels.musicLyrics, async (event, input: { trackId?: string } = {}) => {
+  ipcMain.handle(channels.musicLyrics, async (event, input: { trackId?: string; title?: string; artist?: string; album?: string; durationSeconds?: number } = {}) => {
     guard(event);
     const trackId = idOf(input?.trackId);
     if (!trackId) throw new Error('歌词参数无效');
-    return auth.getLyrics(trackId);
+    const settings = await loadSettings();
+    const text = (value: unknown, max: number) => typeof value === 'string' && value.trim() ? value.trim().slice(0, max) : undefined;
+    const duration = Number(input?.durationSeconds);
+    return auth.getLyrics({
+      trackId,
+      title: text(input?.title, 200),
+      artist: text(input?.artist, 200),
+      album: text(input?.album, 200),
+      durationSeconds: Number.isFinite(duration) && duration > 0 ? Math.round(duration) : undefined,
+    }, settings.thirdPartyLyrics !== false);
   });
   ipcMain.handle(channels.musicReportPlayback, async (event, input: { trackId?: string; title?: string; listenedSeconds?: number; songDurationSeconds?: number } = {}) => {
     guard(event);
@@ -140,6 +150,7 @@ export function registerIpc(
     guard(event);
     return ok(await updateSettings(input));
   });
+  ipcMain.handle(channels.fontsList, async event => { guard(event); return ok({ families: await listSystemFonts() }); });
   ipcMain.handle(channels.queueLoad, async event => { guard(event); return ok(await loadQueue()); });
   ipcMain.handle(channels.queueSave, async (event, input: unknown) => {
     guard(event);

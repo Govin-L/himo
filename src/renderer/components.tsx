@@ -222,6 +222,8 @@ export function PlayerBar(props: PlayerBarProps) {
   </footer>;
 }
 
+const LYRIC_SOURCES: Record<string, string> = { huawei: '华为音乐', kugou: '酷狗音乐', lrclib: 'LRCLIB' };
+
 type LyricsViewProps = {
   doc: LyricsDoc | null;
   loading?: boolean;
@@ -253,6 +255,10 @@ export function LyricsPanel({ doc, loading, positionSeconds, offsetSeconds, onSe
       <strong>歌词</strong>
       <button className="text-button" onClick={onClose}>关闭</button>
     </div>
+    {doc?.source && doc.source !== 'huawei' && <p className="lyric-source">
+      歌词来自 {LYRIC_SOURCES[doc.source] ?? doc.source}
+      {doc.matchedTitle ? ` · 匹配「${doc.matchedTitle}${doc.matchedArtist ? ` - ${doc.matchedArtist}` : ''}」` : ''}
+    </p>}
     {!doc || !lines.length
       ? <p className="panel-empty">{loading ? '正在读取歌词…' : '暂无歌词。可以换一首，或稍后重试。'}</p>
       : <><div ref={container} className={`lyrics ${doc.synced ? 'synced' : ''}`}
@@ -313,6 +319,10 @@ export function LyricsStage({
         <h2 className="stage-title">{track?.title ?? '尚未选择歌曲'}</h2>
         <p className="stage-artist">{track?.artists.map(artist => artist.name).join(' / ') || '未知艺人'}</p>
         {track?.album?.title && <p className="stage-album">{track.album.title}</p>}
+        {doc?.source && doc.source !== 'huawei' && <p className="stage-source">
+          歌词来自 {LYRIC_SOURCES[doc.source] ?? doc.source}
+          {doc.matchedTitle ? ` · 匹配「${doc.matchedTitle}」` : ''}
+        </p>}
       </aside>
       <div className="stage-lyrics-column">
         <div ref={container} className="stage-scroll"

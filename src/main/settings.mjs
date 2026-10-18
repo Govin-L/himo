@@ -7,12 +7,15 @@ export const DEFAULT_SETTINGS = Object.freeze({
   repeatMode: 'off',
   shuffle: false,
   syncHistory: true,
+  thirdPartyLyrics: true,
   appearance: Object.freeze({
     accent: 'red',
     panelOpacity: 1,
     cornerRadius: 11,
     fontScale: 1,
     fontFamily: 'sans',
+    customAccent: '#c8202e',
+    customFont: '',
   }),
 });
 
@@ -20,8 +23,9 @@ import { isSafeResourceUrl } from '../safe-media-url.mjs';
 const CLOSE_BEHAVIORS = new Set(['quit', 'tray']);
 const QUALITIES = new Set(['standard', 'lossless']);
 const REPEAT_MODES = new Set(['off', 'all', 'one']);
-const ACCENTS = new Set(['red', 'blue', 'green', 'amber', 'violet']);
-const FONT_CHOICES = new Set(['sans', 'serif', 'mono']);
+const ACCENTS = new Set(['red', 'blue', 'green', 'amber', 'violet', 'custom']);
+const FONT_CHOICES = new Set(['sans', 'serif', 'mono', 'custom']);
+const HEX_COLOR = /^#[0-9a-f]{6}$/i;
 
 function clampNumber(value, min, max, fallback) {
   return typeof value === 'number' && Number.isFinite(value) ? Math.min(max, Math.max(min, value)) : fallback;
@@ -38,6 +42,12 @@ export function sanitizeAppearance(input, fallback = DEFAULT_SETTINGS.appearance
     cornerRadius: clampNumber(raw.cornerRadius, 0, 18, base.cornerRadius),
     fontScale: clampNumber(raw.fontScale, 0.85, 1.2, base.fontScale),
     fontFamily: FONT_CHOICES.has(raw.fontFamily) ? /** @type {import('../shared/types').FontChoice} */ (raw.fontFamily) : base.fontFamily,
+    customAccent: typeof raw.customAccent === 'string' && HEX_COLOR.test(raw.customAccent) ? raw.customAccent.toLowerCase() : base.customAccent,
+    // A font family name is only ever injected into a CSS font-family list, so strip anything that
+    // could break out of the quoted string and cap the length.
+    customFont: typeof raw.customFont === 'string'
+      ? raw.customFont.replace(/["'\\;{}<>]/g, '').trim().slice(0, 80)
+      : base.customFont,
   };
 }
 
@@ -57,6 +67,7 @@ export function sanitizeSettings(input, fallback = DEFAULT_SETTINGS) {
   if (REPEAT_MODES.has(raw.repeatMode)) next.repeatMode = /** @type {'off' | 'all' | 'one'} */ (raw.repeatMode);
   if (typeof raw.shuffle === 'boolean') next.shuffle = raw.shuffle;
   if (typeof raw.syncHistory === 'boolean') next.syncHistory = raw.syncHistory;
+  if (typeof raw.thirdPartyLyrics === 'boolean') next.thirdPartyLyrics = raw.thirdPartyLyrics;
   if (typeof raw.volume === 'number' && Number.isFinite(raw.volume)) {
     next.volume = Math.min(1, Math.max(0, raw.volume));
   }

@@ -12,6 +12,7 @@ import { APP_BRAND_LABEL } from '../shared/app-name.mjs';
 import {
   autosaveDelay, buildShuffleOrder, historyReportDecision, onEndedAction, popPlayHistory, pushPlayHistory, stepCursor,
 } from './player.mjs';
+import { fontStackFor, tintFromHex } from './theme.mjs';
 import { canRetryMediaFailure, reconcileTrackIndexes } from './track-reconcile.mjs';
 import type {
   AccentName, AppSettings, AuthStatus, AppearanceSettings, FontChoice, LyricsDoc, Playback, Playlist, Result, SavedQueue, Track,
@@ -38,7 +39,7 @@ const NAV_ICONS = {
 };
 
 // Runtime tint map: the CSS keeps red as its default so the first paint is already correct.
-const ACCENTS: Record<AccentName, { accent: string; light: string; deep: string; soft: string; line: string; shadow: string }> = {
+const ACCENTS: Record<Exclude<AccentName, 'custom'>, { accent: string; light: string; deep: string; soft: string; line: string; shadow: string }> = {
   red: { accent: '#c8202e', light: '#e0364a', deep: '#a51724', soft: 'rgba(200, 32, 46, 0.09)', line: 'rgba(200, 32, 46, 0.28)', shadow: 'rgba(200, 32, 46, 0.28)' },
   blue: { accent: '#2563eb', light: '#3b82f6', deep: '#1d4ed8', soft: 'rgba(37, 99, 235, 0.10)', line: 'rgba(37, 99, 235, 0.30)', shadow: 'rgba(37, 99, 235, 0.26)' },
   green: { accent: '#15803d', light: '#22a05a', deep: '#166534', soft: 'rgba(21, 128, 61, 0.10)', line: 'rgba(21, 128, 61, 0.28)', shadow: 'rgba(21, 128, 61, 0.24)' },
@@ -46,7 +47,7 @@ const ACCENTS: Record<AccentName, { accent: string; light: string; deep: string;
   violet: { accent: '#6d28d9', light: '#8b5cf6', deep: '#5b21b6', soft: 'rgba(109, 40, 217, 0.10)', line: 'rgba(109, 40, 217, 0.28)', shadow: 'rgba(109, 40, 217, 0.24)' },
 };
 
-const FONT_STACKS: Record<FontChoice, string> = {
+const FONT_STACKS: Record<Exclude<FontChoice, 'custom'>, string> = {
   sans: "'Inter', 'Noto Sans CJK SC', 'Noto Sans SC', 'Source Han Sans SC', 'PingFang SC', 'Hiragino Sans GB', 'Microsoft YaHei', 'Segoe UI', Arial, sans-serif",
   serif: "'Noto Serif CJK SC', 'Noto Serif SC', 'Source Han Serif SC', 'AR PL UMing CN', 'Songti SC', STSong, SimSun, Georgia, serif",
   mono: "ui-monospace, 'JetBrains Mono', 'Noto Sans Mono CJK SC', 'Sarasa Mono SC', Consolas, monospace",
@@ -55,7 +56,9 @@ const FONT_STACKS: Record<FontChoice, string> = {
 function applyAppearance(appearance: AppearanceSettings | undefined) {
   if (!appearance) return;
   const root = document.documentElement.style;
-  const tint = ACCENTS[appearance.accent] ?? ACCENTS.red;
+  const tint = appearance.accent === 'custom'
+    ? tintFromHex(appearance.customAccent)
+    : ACCENTS[appearance.accent] ?? ACCENTS.red;
   root.setProperty('--accent', tint.accent);
   root.setProperty('--accent-light', tint.light);
   root.setProperty('--accent-deep', tint.deep);
@@ -65,7 +68,9 @@ function applyAppearance(appearance: AppearanceSettings | undefined) {
   root.setProperty('--panel-alpha', String(appearance.panelOpacity));
   root.setProperty('--radius-unit', `${appearance.cornerRadius}px`);
   root.setProperty('--fs-scale', String(appearance.fontScale));
-  root.setProperty('--font-ui', FONT_STACKS[appearance.fontFamily] ?? FONT_STACKS.sans);
+  root.setProperty('--font-ui', appearance.fontFamily === 'custom'
+    ? fontStackFor(appearance.customFont, FONT_STACKS.sans)
+    : FONT_STACKS[appearance.fontFamily] ?? FONT_STACKS.sans);
 }
 
 const HISTORY_KEY = 'local-play-history';
@@ -338,8 +343,16 @@ export function App() {
       return;
     }
     let cancelled = false;
+    const track = currentTrack;
     setLyrics(null); setLyricsLoading(true);
-    void window.desktop.music.lyrics({ trackId }).then(result => {
+    // Title/artist/duration are only used for the third-party fallback match, never for playback.
+    void window.desktop.music.lyrics({
+      trackId,
+      title: track?.title,
+      artist: track?.artists.map(artist => artist.name).join(' / '),
+      album: track?.album?.title,
+      durationSeconds: track?.durationSeconds,
+    }).then(result => {
       if (cancelled) return;
       const doc = result.ok ? result.data : null;
       lyricCache.current.set(trackId, doc);
