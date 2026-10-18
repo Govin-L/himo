@@ -222,7 +222,7 @@ export function PlayerBar(props: PlayerBarProps) {
   </footer>;
 }
 
-const LYRIC_SOURCES: Record<string, string> = { huawei: '华为音乐', kugou: '酷狗音乐', lrclib: 'LRCLIB' };
+const LYRIC_SOURCES: Record<string, string> = { huawei: '华为音乐', kugou: '酷狗音乐', lrclib: 'LRCLIB', local: '本地文件' };
 
 type LyricsViewProps = {
   doc: LyricsDoc | null;
@@ -241,7 +241,12 @@ function useActiveLyric(doc: LyricsDoc | null, positionSeconds: number, offsetSe
   return doc?.synced ? activeLyricIndex(lines, (positionSeconds + offsetSeconds) * 1000) : -1;
 }
 
-export function LyricsPanel({ doc, loading, positionSeconds, offsetSeconds, onSeekTo, onOpenStage, onClose }: LyricsViewProps & { onOpenStage(): void; onClose(): void }) {
+export function LyricsPanel({ doc, loading, positionSeconds, offsetSeconds, onSeekTo, onOpenStage, onImport, onRemoveLocal, onClose }: LyricsViewProps & {
+  onOpenStage(): void;
+  onImport(): void;
+  onRemoveLocal(): void;
+  onClose(): void;
+}) {
   const [following, setFollowing] = useState(true);
   const container = useRef<HTMLDivElement | null>(null);
   const lines = doc?.lines ?? [];
@@ -274,15 +279,19 @@ export function LyricsPanel({ doc, loading, positionSeconds, offsetSeconds, onSe
     <div className="panel-actions">
       {doc?.synced && !following && <button className="ghost" onClick={() => setFollowing(true)}>跟随播放</button>}
       <button className="ghost" onClick={onOpenStage}>沉浸歌词</button>
+      <button className="ghost" onClick={onImport}>{doc?.source === 'local' ? '重新导入' : '导入本地歌词'}</button>
+      {doc?.source === 'local' && <button className="ghost danger" onClick={onRemoveLocal}>移除本地</button>}
     </div>
   </aside>;
 }
 
 export function LyricsStage({
   track, doc, loading, positionSeconds, offsetSeconds, playing, duration, disabled,
-  onSeekTo, onSeekSeconds, onToggle, onPrevious, onNext, onOffset, onClose,
+  onSeekTo, onSeekSeconds, onToggle, onPrevious, onNext, onOffset, onImport, onRemoveLocal, onClose,
 }: LyricsViewProps & {
   track?: Track;
+  onImport(): void;
+  onRemoveLocal(): void;
   playing: boolean;
   duration: number;
   disabled: boolean;

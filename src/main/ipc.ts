@@ -1,10 +1,12 @@
-import { app, ipcMain, type BrowserWindow } from 'electron';
+import { app, dialog, ipcMain, type BrowserWindow } from 'electron';
 import { channels } from '../shared/channels';
 import { AuthManager, isAllowedSender } from './auth-manager';
 import { loadQueue, loadSettings, saveQueue, updateSettings } from './storage';
 import { listSystemFonts } from './system-fonts';
+import { clearLyricsCache, lyricsCacheInfo, readLyricsFile, removeLocalLyrics, writeLocalLyrics } from './lyrics-cache';
+import { parseLyrics } from '../lyrics.mjs';
 import { fail, ok } from '../shared/result';
-import type { SavedQueue } from '../shared/types';
+import type { LyricsDoc, SavedQueue } from '../shared/types';
 
 export function registerIpc(
   window: BrowserWindow,
@@ -151,6 +153,40 @@ export function registerIpc(
     return ok(await updateSettings(input));
   });
   ipcMain.handle(channels.fontsList, async event => { guard(event); return ok({ families: await listSystemFonts() }); });
+  ipcMain.handle(channels.lyricsCacheInfo, async event => { guard(event); return ok(await lyricsCacheInfo()); });
+  ipcMain.handle(channels.lyricsClearCache, async (event, input: { local?: boolean } = {}) => {
+    guard(event);
+    return ok(await clearLyricsCache({ local: input?.local === true }));
+  });
+  ipcMain.handle(channels.lyricsImport, async (event, input: { trackId?: string } = {}) => {
+    guard(event);
+    const trackId = idOf(input?.trackId);
+    if (!trackId) throw new Error('歌词参数无效');
+    // The picker is a pure read of a local file; cancellation resolves to null, not an error.
+    const picked = await dialog.showOpenDialog(window, {
+      title: '选择歌词文件',
+      buttonLabel: '导入',
+      properties: ['openFile'],
+      filters: [{ name: '歌词文件', extensions: ['lrc', 'txt'] }],
+    });
+    const filePath = picked.canceled ? undefined : picked.filePaths[0];
+    if (!filePath) return ok(null);
+    const { text, fileName } = await readLyricsFile(filePath);
+    const doc = parseLyrics(text) as LyricsDoc;
+    if (!doc.lines.length) throw new Error('这个文件里没有可识别的歌词');
+    await writeLocalLyrics(trackId, text, fileName, doc);
+    const stored = { ...doc, source: 'local' as const };
+    auth.rememberLyrics(trackId, stored);
+    return ok(stored);
+  });
+  ipcMain.handle(channels.lyricsRemoveLocal, async (event, input: { trackId?: string } = {}) => {
+    guard(event);
+    const trackId = idOf(input?.trackId);
+    if (!trackId) throw new Error('歌词参数无效');
+    const removed = await removeLocalLyrics(trackId);
+    if (removed) auth.forgetLyrics(trackId);
+    return ok({ removed });
+  });
   ipcMain.handle(channels.queueLoad, async event => { guard(event); return ok(await loadQueue()); });
   ipcMain.handle(channels.queueSave, async (event, input: unknown) => {
     guard(event);

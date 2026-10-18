@@ -3,8 +3,9 @@ import { Disc3, ListMusic, Mic2, Play, Search as SearchIcon, Trash2 } from 'luci
 import { Cover, PlaylistGrid, TrackTable, type TrackActions } from './components';
 import { mergeFavoritesPage } from './favorites-pagination.mjs';
 import type {
-  AccentName, AlbumDetail, AppearanceSettings, ArtistDetail, AppSettings, FontChoice, Playlist, Result, SavedQueue, Track,
+  AccentName, AlbumDetail, AppearanceSettings, ArtistDetail, AppSettings, FontChoice, LyricsCacheInfo, Playlist, Result, SavedQueue, Track,
 } from '../shared/types';
+import { formatBytes } from '../shared/format.mjs';
 import { APP_DISPLAY_NAME } from '../shared/app-name.mjs';
 
 export type LibraryContext = TrackActions & {
@@ -346,6 +347,16 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
   const customFont = shown.customFont;
 
   // Reading installed fonts needs a user gesture and the Electron font-access permission.
+  const [lyricsCache, setLyricsCache] = useState<LyricsCacheInfo | null>(null);
+  useEffect(() => { void window.desktop.lyrics.cacheInfo().then(result => { if (result.ok) setLyricsCache(result.data); }); }, []);
+  async function clearLyricsCache(local: boolean) {
+    const result = await window.desktop.lyrics.clearCache({ local }).catch(() => null);
+    if (result?.ok) {
+      setLyricsCache(result.data);
+      ctx.notice(local ? '已清除本地导入与网络歌词缓存。' : '已清除网络歌词缓存。');
+    } else ctx.notice('清除歌词缓存失败，请重试。');
+  }
+
   const [systemFonts, setSystemFonts] = useState<string[]>([]);
   const [fontQuery, setFontQuery] = useState('');
   const [fontError, setFontError] = useState('');
@@ -425,6 +436,21 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
             onChange={event => void ctx.updateSettings({ thirdPartyLyrics: event.target.checked })} />
         </label>
         <p className="hint">华为接口没有返回歌词时，用「歌名 + 艺人 + 时长」在酷狗音乐和 LRCLIB 严格匹配；匹配不准则保持无歌词，不会显示别的歌。只请求歌词文本，不涉及音源，也不会上传账号信息。</p>
+        <div className="cache-block">
+          <div className="cache-text">
+            <span>歌词缓存</span>
+            <span className="hint">
+              {lyricsCache
+                ? `${formatBytes(lyricsCache.bytes)} · 网络 ${lyricsCache.entries} 首 · 本地导入 ${lyricsCache.localEntries} 首`
+                : '正在读取缓存信息…'}
+            </span>
+          </div>
+          <div className="cache-actions">
+            <button className="ghost" onClick={() => void clearLyricsCache(false)} disabled={!lyricsCache?.entries}>清除网络缓存</button>
+            <button className="ghost danger" onClick={() => void clearLyricsCache(true)} disabled={!lyricsCache?.entries && !lyricsCache?.localEntries}>清除本地导入</button>
+          </div>
+        </div>
+        <p className="hint">歌词按曲目缓存在本机 90 天，重启或切换账号后仍可用；本地导入的 LRC 优先级最高，可在歌词面板里移除。</p>
       </div>}
 
       {tab === 'appearance' && <div className="settings-form appearance-form">

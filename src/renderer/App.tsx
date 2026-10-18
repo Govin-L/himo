@@ -114,6 +114,7 @@ export function App() {
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
   const [lyricOffset, setLyricOffset] = useState(0);
+  const [lyricRevision, setLyricRevision] = useState(0);
   const lyricCache = useRef(new Map<string, LyricsDoc | null>());
   const [queueOpen, setQueueOpen] = useState(false);
   const [favoriteIds, setFavoriteIds] = useState<Set<string>>(new Set());
@@ -363,7 +364,30 @@ export function App() {
       setLyrics(null); setLyricsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [lyricsOpen, stageOpen, currentTrack?.id]);
+  }, [lyricsOpen, stageOpen, currentTrack?.id, lyricRevision]);
+
+  async function importLocalLyrics() {
+    const trackId = currentTrack?.id;
+    if (!trackId) return;
+    const result = await window.desktop.lyrics.importLocal(trackId).catch(() => null);
+    if (!result) { setMessage('导入失败，请重试。'); return; }
+    if (!result.ok) { setMessage(result.error.message); return; }
+    if (!result.data) return; // cancelled
+    lyricCache.current.set(trackId, result.data);
+    setLyrics(result.data);
+    setMessage(`已导入本地歌词（${result.data.lines.length} 行）。`);
+  }
+
+  async function removeLocalLyrics() {
+    const trackId = currentTrack?.id;
+    if (!trackId) return;
+    const result = await window.desktop.lyrics.removeLocal(trackId).catch(() => null);
+    if (!result?.ok) { setMessage('移除失败，请重试。'); return; }
+    lyricCache.current.delete(trackId);
+    setLyrics(null);
+    setMessage(result.data.removed ? '已移除本地歌词，改为读取云端歌词。' : '当前歌曲没有本地歌词。');
+    setLyricRevision(value => value + 1);
+  }
 
   function applySettings(next: AppSettings) {
     setSettings(next);
@@ -778,6 +802,8 @@ export function App() {
       offsetSeconds={lyricOffset}
       onSeekTo={seekToLyric}
       onOpenStage={() => setStageOpen(true)}
+      onImport={() => void importLocalLyrics()}
+      onRemoveLocal={() => void removeLocalLyrics()}
       onClose={() => setLyricsOpen(false)}
     />}
     {queueOpen && <QueuePanel tracks={queue} currentId={currentTrack?.id ?? null} onSelect={queueIndex => { const at = order.current.indexOf(queueIndex); void playAt(at < 0 ? 0 : at); }} onClose={() => setQueueOpen(false)} />}
@@ -796,6 +822,8 @@ export function App() {
       onPrevious={goPrevious}
       onNext={goNext}
       onOffset={changeLyricOffset}
+      onImport={() => void importLocalLyrics()}
+      onRemoveLocal={() => void removeLocalLyrics()}
       onClose={() => setStageOpen(false)}
     />}
     <PlayerBar

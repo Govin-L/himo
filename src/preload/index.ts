@@ -43,6 +43,12 @@ const api: DesktopApi = {
   fonts: {
     list: () => ipcRenderer.invoke(channels.fontsList),
   },
+  lyrics: {
+    importLocal: trackId => ipcRenderer.invoke(channels.lyricsImport, { trackId }),
+    removeLocal: trackId => ipcRenderer.invoke(channels.lyricsRemoveLocal, { trackId }),
+    cacheInfo: () => ipcRenderer.invoke(channels.lyricsCacheInfo),
+    clearCache: input => ipcRenderer.invoke(channels.lyricsClearCache, input ?? {}),
+  },
   window: {
     minimize: () => ipcRenderer.invoke(channels.windowMinimize),
     setCloseBehavior: input => ipcRenderer.invoke(channels.windowSetCloseBehavior, input),

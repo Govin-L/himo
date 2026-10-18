@@ -12,6 +12,7 @@ import {
   lyrics, openLogin, playlistDetail, playlists, resolvePlayback, search, setFavorite, updatePlaylistDescription,
 } from './huawei';
 import { thirdPartyLyrics } from './lyrics-fallback';
+import { readCachedLyrics, readLocalLyrics, writeCachedLyrics } from './lyrics-cache';
 import { isTrustedRendererUrl } from './renderer-origin.mjs';
 import { errorFrom, fail, ok } from '../shared/result';
 import type {
@@ -181,11 +182,17 @@ export class AuthManager {
     const key = `lyrics:${input.trackId}`;
     const hit = this.memory.get(key);
     if (hit) return ok(hit.data as LyricsDoc);
+    // Local imports win over everything and work even without a signed-in session.
+    const local = await readLocalLyrics(input.trackId).catch(() => null);
+    if (local) { this.memory.set(key, local.doc); return ok(local.doc); }
+    const cached = await readCachedLyrics(input.trackId).catch(() => null);
+    if (cached) { this.memory.set(key, cached); return ok(cached); }
     const result = await this.#sessionRequest(() => lyrics(this.session!, input.trackId), '账号状态已更改，请重新读取歌词。');
     if (!result.ok) return result;
     if (result.data.lines.length) {
       const doc = { ...result.data, source: 'huawei' as const };
       this.memory.set(key, doc);
+      await writeCachedLyrics(input.trackId, doc).catch(() => undefined);
       return ok(doc);
     }
     if (thirdParty) {
@@ -193,9 +200,23 @@ export class AuthManager {
       // libraries are allowed to answer. Failures are silent and left uncached so a retry can work.
       const fallback = await thirdPartyLyrics({ title: input.title, artist: input.artist, album: input.album, durationSeconds: input.durationSeconds })
         .catch(() => null);
-      if (fallback) { this.memory.set(key, fallback); return ok(fallback); }
+      if (fallback) {
+        this.memory.set(key, fallback);
+        await writeCachedLyrics(input.trackId, fallback).catch(() => undefined);
+        return ok(fallback);
+      }
     }
     return result;
+  }
+
+  /** Stores a freshly imported local lyric in the in-process cache. */
+  rememberLyrics(trackId: string, doc: LyricsDoc): void {
+    this.memory.set(`lyrics:${trackId}`, doc);
+  }
+
+  /** Drops the in-process lyric so the next read re-resolves from disk/providers. */
+  forgetLyrics(trackId: string): void {
+    this.memory.invalidate(`lyrics:${trackId}`);
   }
   async getFavoriteState(trackId: string): Promise<Result<{ favorite: boolean }>> {
     return this.#sessionRequest(async () => ({ favorite: await favoriteExist(this.session!, trackId) }), '账号状态已更改，请重新读取收藏状态。');

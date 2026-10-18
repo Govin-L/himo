@@ -784,6 +784,20 @@ select:focus-visible,
 .settings-form .ghost.danger { align-self: flex-start; margin-top: 18px; }
 .settings-form > .hint:last-child { border-bottom: 0; padding-bottom: 0; }
 
+.cache-block {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 15px 2px;
+  border-bottom: 1px solid var(--line);
+}
+.cache-text { display: grid; gap: 3px; }
+.cache-text > span:first-child { font-size: var(--fs-sm); color: var(--ink); }
+.cache-actions { display: flex; gap: 8px; }
+
+
 /* Settings: two-level navigation (categories → panel) */
 .settings-page {
   display: grid;

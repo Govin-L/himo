@@ -176,6 +176,8 @@ try {
 
   await page.getByRole('button', { name: '设置' }).click();
   await shot('07-settings-playback.png');
+  await page.locator('.cache-block').scrollIntoViewIfNeeded();
+  await shot('07b-settings-lyrics-cache.png');
   await page.locator('.settings-nav-item', { hasText: '外观' }).click();
   await shot('08-settings-appearance.png');
   await page.getByRole('button', { name: '衬线', exact: true }).click();

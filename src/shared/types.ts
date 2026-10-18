@@ -50,7 +50,7 @@ export type LyricsLine = {
   // Word level marks from <mm:ss.xx> tags, when the source provides them.
   segments?: LyricSegment[];
 };
-export type LyricsSource = 'huawei' | 'kugou' | 'lrclib';
+export type LyricsSource = 'huawei' | 'kugou' | 'lrclib' | 'local';
 export type LyricsDoc = {
   synced: boolean;
   lines: LyricsLine[];
@@ -59,6 +59,7 @@ export type LyricsDoc = {
   matchedTitle?: string;
   matchedArtist?: string;
 };
+export type LyricsCacheInfo = { bytes: number; entries: number; localBytes: number; localEntries: number };
 export type AlbumDetail = {
   album: { id: string; title: string; coverUrl?: string; count?: number; artists: { id?: string; name: string }[] };
   tracks: Track[];
@@ -161,6 +162,13 @@ export type DesktopApi = {
   };
   window: { minimize(): Promise<void>; setCloseBehavior(input: 'quit' | 'tray'): Promise<Result<AppSettings>> };
   fonts: { list(): Promise<Result<{ families: string[] }>> };
+  lyrics: {
+    /** Opens a picker; resolves null when the user cancels. */
+    importLocal(trackId: string): Promise<Result<LyricsDoc | null>>;
+    removeLocal(trackId: string): Promise<Result<{ removed: boolean }>>;
+    cacheInfo(): Promise<Result<LyricsCacheInfo>>;
+    clearCache(input?: { local?: boolean }): Promise<Result<LyricsCacheInfo>>;
+  };
   app: { quit(): Promise<void> };
   player: { onCommand(listener: (command: 'play-pause' | 'next' | 'previous') => void): () => void };
   onNotice(listener: (message: string) => void): () => void;

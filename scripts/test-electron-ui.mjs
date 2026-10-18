@@ -3,7 +3,7 @@
 import electron from 'electron';
 import assert from 'node:assert/strict';
 import { execFileSync } from 'node:child_process';
-import { mkdir, mkdtemp, readFile, rm } from 'node:fs/promises';
+import { mkdir, mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { _electron as playwright } from 'playwright-core';
@@ -129,7 +129,7 @@ try {
     nodeProcess: typeof process,
     genericInvoke: typeof window.desktop?.invoke,
   }));
-  assert.deepEqual(boundary.apiKeys, ['app', 'auth', 'fonts', 'music', 'onNotice', 'player', 'queue', 'settings', 'window']);
+  assert.deepEqual(boundary.apiKeys, ['app', 'auth', 'fonts', 'lyrics', 'music', 'onNotice', 'player', 'queue', 'settings', 'window']);
   assert.deepEqual(boundary.musicKeys, ['album', 'artist', 'createPlaylist', 'deletePlaylist', 'favoriteState', 'favorites', 'favoritesSummary', 'history', 'lyrics',
     'playlistDetail', 'playlists', 'reportPlayback', 'resolvePlayback', 'search', 'setFavorite', 'updatePlaylistDescription']);
   assert.equal(boundary.nodeProcess, 'undefined');
@@ -220,6 +220,17 @@ try {
   // Lyrics / queue panels are mutually exclusive overlays.
   await page.getByRole('button', { name: '歌词' }).click();
   await page.getByText('第一句歌词').waitFor({ timeout: 5000 });
+
+  // Local LRC import: the file dialog is stubbed, everything else runs for real (disk + IPC + parse).
+  const localLrc = join(profile, 'import-test.lrc');
+  await writeFile(localLrc, '[00:00.00]本地第一句\n[00:30.00]本地第二句\n', 'utf8');
+  await app.evaluate(({ dialog }, filePath) => {
+    dialog.showOpenDialog = async () => ({ canceled: false, filePaths: [filePath] });
+  }, localLrc);
+  await page.getByRole('button', { name: '导入本地歌词' }).click();
+  await page.getByText('本地第一句').waitFor({ timeout: 5000 });
+  await page.getByText(/歌词来自 本地文件/).waitFor({ timeout: 3000 });
+  assert.equal(await page.getByRole('button', { name: '移除本地' }).count(), 1, 'an imported lyric should be removable');
   await page.getByRole('button', { name: '播放队列' }).click();
   await page.locator('.side-panel[aria-label="播放队列"]').waitFor({ timeout: 5000 });
   assert.equal(await page.locator('.side-panel[aria-label="歌词"]').count(), 0, 'opening the queue should close the lyrics panel');
@@ -273,6 +284,10 @@ try {
   // Settings page persists the close behaviour through the real IPC and JSON store.
   await page.getByRole('button', { name: '设置' }).click();
   await page.getByText(/当前版本/).waitFor({ timeout: 5000 });
+  // Lyric cache: size/entry counts come from the real cache directory; clearing is real too.
+  await page.getByText(/本地导入 1 首/).waitFor({ timeout: 5000 });
+  await page.getByRole('button', { name: '清除本地导入' }).click();
+  await page.getByText(/本地导入 0 首/).waitFor({ timeout: 5000 });
   await page.getByRole('combobox', { name: '关闭窗口时行为' }).selectOption('tray');
   await page.getByText('关闭窗口时将最小化到托盘。').waitFor({ timeout: 5000 });
   // `app.getPath('userData')` is the isolated profile passed via --user-data-dir, so the store can
