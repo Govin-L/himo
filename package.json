@@ -92,7 +92,8 @@
           ]
         }
       ],
-      "forceCodeSigning": false
+      "forceCodeSigning": false,
+      "artifactName": "${name}-${version}-${os}-${arch}-setup-internal.${ext}"
     },
     "nsis": {
       "oneClick": false,

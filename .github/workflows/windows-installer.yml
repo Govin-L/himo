@@ -111,6 +111,10 @@ jobs:
           '@
           gh release view $tag --repo $env:GITHUB_REPOSITORY *> $null
           if ($LASTEXITCODE -eq 0) {
+            # Replacing a build must not leave older installers or the retired portable asset behind.
+            gh release view $tag --repo $env:GITHUB_REPOSITORY --json assets -q '.assets[].name' |
+              Where-Object { $_ -like '*.exe' } |
+              ForEach-Object { gh release delete-asset $tag $_ --repo $env:GITHUB_REPOSITORY -y }
             gh release upload $tag --repo $env:GITHUB_REPOSITORY $exe $sums --clobber
           } else {
             gh release create $tag --repo $env:GITHUB_REPOSITORY --target $env:GITHUB_SHA `
