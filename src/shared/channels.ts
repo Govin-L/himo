@@ -33,6 +33,19 @@ export const channels = {
   appQuit: 'app:quit',
   appNotice: 'app:notice',
   playerCommand: 'player:command',
+  desktopLyricsSetVisible: 'desktop-lyrics:set-visible',
+  desktopLyricsGetVisible: 'desktop-lyrics:get-visible',
+  desktopLyricsPublish: 'desktop-lyrics:publish',
+  desktopLyricsReadState: 'desktop-lyrics:read-state',
+  desktopLyricsClose: 'desktop-lyrics:close',
+  desktopLyricsMove: 'desktop-lyrics:move',
+  desktopLyricsOpenSettings: 'desktop-lyrics:open-settings',
+  desktopLyricsShowSettings: 'desktop-lyrics:show-settings',
+  desktopLyricsState: 'desktop-lyrics:state',
+  desktopLyricsVisibility: 'desktop-lyrics:visibility',
+  desktopLyricsGetPreferences: 'desktop-lyrics:get-preferences',
+  desktopLyricsUpdatePreferences: 'desktop-lyrics:update-preferences',
+  desktopLyricsPreferences: 'desktop-lyrics:preferences',
 } as const;
 
 export type Channel = (typeof channels)[keyof typeof channels];

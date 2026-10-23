@@ -2,6 +2,7 @@ import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, session,
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
+import { registerDesktopLyrics } from './desktop-lyrics';
 import { AuthManager } from './auth-manager';
 import { createAuthManagerLifecycle } from './auth-manager-lifecycle.mjs';
 import { applyNodeProxy, electronBypassRules, proxyConfigurationProblem, proxyRules, readProxySettings } from './proxy.mjs';
@@ -51,6 +52,8 @@ async function createWindow(): Promise<void> {
     const auth = await authManagerLifecycle.get();
     if (window.isDestroyed()) return;
     registerIpc(window, auth, { onCloseBehavior: value => { closeBehavior = value; } });
+    await registerDesktopLyrics(window);
+    if (window.isDestroyed()) return;
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
     window.webContents.session.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false));
     window.webContents.session.setPermissionCheckHandler(() => false);

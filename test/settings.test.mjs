@@ -1,11 +1,14 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { DEFAULT_SETTINGS, sanitizeAppearance, sanitizeQueue, sanitizeSettings } from '../src/main/settings.mjs';
+import {
+  DEFAULT_SETTINGS, DESKTOP_LYRIC_PATCH_KEYS, sanitizeAppearance, sanitizeDesktopLyrics, sanitizeQueue, sanitizeSettings,
+} from '../src/main/settings.mjs';
 
 test('settings keep only known enum values and clamp volume', () => {
   assert.deepEqual(sanitizeSettings({ closeBehavior: 'tray', quality: 'lossless', volume: 5, repeatMode: 'one', shuffle: true, syncHistory: false }), {
     closeBehavior: 'tray', quality: 'lossless', volume: 1, repeatMode: 'one', shuffle: true, syncHistory: false,
     thirdPartyLyrics: true,
+    desktopLyrics: DEFAULT_SETTINGS.desktopLyrics,
     appearance: DEFAULT_SETTINGS.appearance,
   });
   assert.deepEqual(sanitizeSettings({ closeBehavior: 'evil', quality: 'hires', volume: -3, repeatMode: 'loop', shuffle: 'yes', syncHistory: 'yes' }), {
@@ -76,4 +79,40 @@ test('a custom accent colour and font family are validated, not trusted', () => 
   assert.equal(/["'\\;{}<>]/.test(cleaned), false);
   assert.match(cleaned, /^Bad/);
   assert.equal(sanitizeAppearance({ fontFamily: 'custom', customFont: 'x'.repeat(200) }).customFont.length, 80);
+});
+
+test('desktop lyric preferences preserve position and unrelated settings across partial patches', () => {
+  const original = sanitizeSettings({ quality: 'lossless', desktopLyrics: { position: { x: -600, y: 90 }, fontSize: 38, locked: true } });
+  const next = sanitizeSettings({ desktopLyrics: { fontSize: 42 } }, original);
+  assert.deepEqual(next.desktopLyrics, { ...DEFAULT_SETTINGS.desktopLyrics, position: { x: -600, y: 90 }, fontSize: 42, locked: true });
+  assert.equal(next.quality, 'lossless');
+  assert.deepEqual(sanitizeSettings({ volume: 0.5 }).desktopLyrics, DEFAULT_SETTINGS.desktopLyrics);
+});
+
+test('desktop lyric settings reject invalid saved positions and constrain text size', () => {
+  const saved = sanitizeSettings({ desktopLyrics: { position: { x: 50, y: 60 }, fontSize: 38, locked: true } });
+  assert.deepEqual(sanitizeSettings({ desktopLyrics: { position: { x: Infinity, y: 2 }, fontSize: -99, locked: 'yes' } }, saved).desktopLyrics,
+    { ...DEFAULT_SETTINGS.desktopLyrics, position: { x: 50, y: 60 }, fontSize: 18, locked: true });
+  assert.equal(sanitizeSettings({ desktopLyrics: { fontSize: 999 } }).desktopLyrics.fontSize, 64);
+  assert.equal(sanitizeSettings({ desktopLyrics: { position: null } }, saved).desktopLyrics.position, null);
+});
+
+test('desktop lyric styles keep valid colours, gradients, ranges and safe font names', () => {
+  const saved = sanitizeSettings({ desktopLyrics: { color: '#AABBCC', colorEnd: '#112233', playedColorEnd: '#445566' } });
+  assert.deepEqual([saved.desktopLyrics.color, saved.desktopLyrics.colorEnd], ['#aabbcc', '#112233']);
+  const next = sanitizeSettings({ desktopLyrics: {
+    color: 'red', colorEnd: null, playedColorEnd: '#zzzzzz', opacity: 0.05, backgroundOpacity: 2, secondaryScale: 0.333,
+    background: 'blur', stroke: 'thick', fontWeight: 'heavy', fontFamily: 'Kaiti";}', dimWhenPaused: 'yes',
+  } }, saved).desktopLyrics;
+  assert.deepEqual({ ...next, position: undefined }, {
+    ...DEFAULT_SETTINGS.desktopLyrics, position: undefined,
+    color: '#aabbcc', colorEnd: null, playedColorEnd: '#445566', opacity: 0.2, backgroundOpacity: 0.9, secondaryScale: 0.5,
+    stroke: 'thick', fontFamily: 'Kaiti',
+  });
+  // The lyrics IPC accepts a patch only when sanitising leaves it unchanged, so valid values must round-trip.
+  const patch = { opacity: 0.85, backgroundOpacity: 0.35, secondaryScale: 0.64, playedColorEnd: null, fontFamily: 'PingFang SC' };
+  const clean = sanitizeDesktopLyrics(patch, DEFAULT_SETTINGS.desktopLyrics);
+  assert.deepEqual(Object.keys(patch).filter(key => clean[key] !== patch[key]), []);
+  assert.equal(DESKTOP_LYRIC_PATCH_KEYS.includes('position'), false);
+  assert.equal(DESKTOP_LYRIC_PATCH_KEYS.includes('opacity'), true);
 });

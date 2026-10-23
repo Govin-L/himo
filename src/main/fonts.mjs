@@ -18,6 +18,16 @@ export function parseFcList(output) {
   return sorted(names);
 }
 
+/** AppKit prints one family per line; names starting with "." are private system UI faces. */
+export function parseMacFontFamilies(output) {
+  const names = new Set();
+  for (const line of String(output ?? '').split(/\r?\n/)) {
+    const name = line.trim();
+    if (name && !name.startsWith('.')) names.add(name);
+  }
+  return sorted(names);
+}
+
 /** PowerShell prints one family name per line; strip any legacy "(TrueType)" suffix. */
 export function parseWindowsFontList(output) {
   const names = new Set();

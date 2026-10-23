@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { parseFcList, parseWindowsFontList } from '../src/main/fonts.mjs';
+import { parseFcList, parseMacFontFamilies, parseWindowsFontList } from '../src/main/fonts.mjs';
 
 test('fc-list family output is split, deduplicated and sorted', () => {
   const output = [
@@ -19,4 +19,10 @@ test('windows font names drop legacy type suffixes and ignore blank lines', () =
   const output = ['Arial (TrueType)', 'Segoe UI (TrueType)', 'Source Han Sans SC (OpenType)', '', '  Microsoft YaHei  '].join('\r\n');
   assert.deepEqual(parseWindowsFontList(output), ['Arial', 'Microsoft YaHei', 'Segoe UI', 'Source Han Sans SC']);
   assert.deepEqual(parseWindowsFontList(''), []);
+});
+
+test('macOS font families skip private system faces, blanks and duplicates', () => {
+  const output = ['PingFang SC', '.AppleSystemUIFont', '', '  Helvetica Neue  ', 'PingFang SC'].join('\n');
+  assert.deepEqual(parseMacFontFamilies(output), ['Helvetica Neue', 'PingFang SC']);
+  assert.deepEqual(parseMacFontFamilies(''), []);
 });

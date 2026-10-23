@@ -7,6 +7,7 @@ import { join } from 'node:path';
 const suites = {
   smoke: [['node', 'scripts/test-electron-smoke.mjs'], ['node', 'scripts/test-electron-proxy.mjs']],
   ui: [['node', 'scripts/test-electron-ui.mjs']],
+  lyrics: [['node', 'scripts/test-desktop-lyrics.mjs']],
   business: [['node', 'scripts/test-electron-business.mjs']],
   favorites: [['node', 'scripts/test-electron-favorites.mjs']],
   packaged: [['node', 'scripts/test-packaged.mjs', ...process.argv.slice(3)]],

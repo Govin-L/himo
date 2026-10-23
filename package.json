@@ -22,6 +22,7 @@
     "test:unit": "vitest run",
     "test:electron": "npm run build && node scripts/run-electron-tests.mjs smoke",
     "test:electron-ui": "npm run build && node scripts/run-electron-tests.mjs ui",
+    "test:desktop-lyrics": "npm run build && node scripts/run-electron-tests.mjs lyrics",
     "test:electron-business": "npm run build && node scripts/run-electron-tests.mjs business",
     "test:electron-favorites": "npm run build && node scripts/run-electron-tests.mjs favorites",
     "test:release-contents": "npm run build && node scripts/check-release-contents.mjs",

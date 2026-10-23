@@ -1,9 +1,11 @@
 import { useEffect, useRef, useState, type CSSProperties } from 'react';
-import { Disc3, ListMusic, Mic2, Play, Search as SearchIcon, Trash2 } from 'lucide-react';
+import { Disc3, ListMusic, Mic2, Moon, Play, RotateCcw, Search as SearchIcon, Sun, Trash2 } from 'lucide-react';
 import { Cover, PlaylistGrid, TrackTable, type TrackActions } from './components';
+import { desktopLyricsStyle, LyricsPlate, LyricText } from './DesktopLyricsWindow';
 import { mergeFavoritesPage } from './favorites-pagination.mjs';
 import type {
-  AccentName, AlbumDetail, AppearanceSettings, ArtistDetail, AppSettings, FontChoice, LyricsCacheInfo, Playlist, Result, SavedQueue, Track,
+  AccentName, AlbumDetail, AppearanceSettings, ArtistDetail, AppSettings, DesktopLyricsPreferencePatch, DesktopLyricsPreferences,
+  FontChoice, LyricsCacheInfo, Playlist, Result, SavedQueue, Track,
 } from '../shared/types';
 import { formatBytes } from '../shared/format.mjs';
 import { APP_DISPLAY_NAME } from '../shared/app-name.mjs';
@@ -326,9 +328,239 @@ export function HistoryPage({ ctx }: { ctx: LibraryContext }) {
   </section>;
 }
 
-export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
+export type SettingsTab = 'playback' | 'appearance' | 'desktopLyrics' | 'about';
+
+type LyricColors = Pick<DesktopLyricsPreferences, 'color' | 'colorEnd' | 'playedColor' | 'playedColorEnd' | 'strokeColor'>;
+// The first scheme is the default look; `light` schemes are meant for bright wallpapers.
+const LYRIC_PRESETS: { name: string; light?: boolean; colors: LyricColors }[] = [
+  { name: '暖金', colors: { color: '#fff1b8', colorEnd: null, playedColor: '#ffd65c', playedColorEnd: null, strokeColor: '#000000' } },
+  { name: '月白', colors: { color: '#ffffff', colorEnd: '#e2e8f0', playedColor: '#8fe3ff', playedColorEnd: '#3fa7ff', strokeColor: '#0b1220' } },
+  { name: '天青', colors: { color: '#e9f7ff', colorEnd: '#bfe3ff', playedColor: '#6fd3ff', playedColorEnd: '#2f86ff', strokeColor: '#0a1f35' } },
+  { name: '樱粉', colors: { color: '#fff1f6', colorEnd: '#ffd3e4', playedColor: '#ff9ac8', playedColorEnd: '#ff4f93', strokeColor: '#3b0d21' } },
+  { name: '落日', colors: { color: '#fff4e8', colorEnd: '#ffd8b5', playedColor: '#ffbe5c', playedColorEnd: '#ff6a3d', strokeColor: '#2b1206' } },
+  { name: '墨黑', light: true, colors: { color: '#3a3f47', colorEnd: '#1f2329', playedColor: '#f0454a', playedColorEnd: '#c81f32', strokeColor: '#ffffff' } },
+];
+// Mirrors the style defaults in main/settings.mjs; the window position and lock are not style.
+const LYRIC_STYLE_DEFAULTS: DesktopLyricsPreferencePatch = {
+  fontSize: 36, opacity: 1, dimWhenPaused: false, background: 'none', backgroundOpacity: 0.4,
+  ...LYRIC_PRESETS[0].colors, stroke: 'medium', fontFamily: '', fontWeight: 'bold', secondaryScale: 0.64,
+};
+const LYRIC_SAMPLE = [...'夜航的人不说再见'];
+const LYRIC_SAMPLE_TRANSLATION = 'No goodbyes on night flights';
+const percentOf = (value: number, min: number, max: number) => `${Math.round(((value - min) / (max - min)) * 100)}%`;
+
+// A visible second stop for a new gradient: darker for light colours, lighter for dark ones.
+function gradientSeed(hex: string): string {
+  const channels = [1, 3, 5].map(at => parseInt(hex.slice(at, at + 2), 16));
+  const light = channels.reduce((sum, value) => sum + value, 0) / 3 > 128;
+  return `#${channels.map(value => Math.round(light ? value * 0.78 : value + (255 - value) * 0.3).toString(16).padStart(2, '0')).join('')}`;
+}
+
+function ColorDot({ label, value, onChange }: { label: string; value: string; onChange(value: string): void }) {
+  return <label className="color-dot" style={{ background: value }} title={label}>
+    <input type="color" aria-label={label} value={value} onChange={event => onChange(event.target.value)} />
+  </label>;
+}
+
+function GradientColor({ label, start, end, onChange }: {
+  label: string; start: string; end: string | null; onChange(start: string, end: string | null): void;
+}) {
+  return <div className="lyric-setting-row">
+    <span>{label}</span>
+    <div className="color-pair">
+      <ColorDot label={`${label}颜色`} value={start} onChange={next => onChange(next, end)} />
+      {end !== null && <>
+        <span className="color-ramp" style={{ background: `linear-gradient(to right, ${start}, ${end})` }} />
+        <ColorDot label={`${label}渐变终点色`} value={end} onChange={next => onChange(start, next)} />
+      </>}
+      <label className="inline-toggle">
+        <input type="checkbox" aria-label={`${label}使用渐变`} checked={end !== null}
+          onChange={event => onChange(start, event.target.checked ? gradientSeed(start) : null)} />
+        渐变
+      </label>
+    </div>
+  </div>;
+}
+
+// The preview sings along slowly so the played colour is visible; it stays still for reduced motion.
+// The ticking state lives here so only the preview re-renders, not the whole settings tab.
+function LyricPreview({ preferences, backdrop, onBackdrop }: {
+  preferences: DesktopLyricsPreferences; backdrop: 'dark' | 'light'; onBackdrop(value: 'dark' | 'light'): void;
+}) {
+  const [played, setPlayed] = useState(4);
+  useEffect(() => {
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    const timer = window.setInterval(() => setPlayed(count => (count + 1) % (LYRIC_SAMPLE.length + 4)), 420);
+    return () => window.clearInterval(timer);
+  }, []);
+  return <div className="lyric-preview" data-backdrop={backdrop} style={desktopLyricsStyle(preferences)}>
+    <div className="lyric-preview-bar">
+      <span className="lyric-preview-label">实时预览</span>
+      <div className="segmented" role="group" aria-label="预览背景">
+        <button className={backdrop === 'dark' ? 'active' : ''} aria-pressed={backdrop === 'dark'} onClick={() => onBackdrop('dark')}>
+          <Moon size={12} />深色桌面
+        </button>
+        <button className={backdrop === 'light' ? 'active' : ''} aria-pressed={backdrop === 'light'} onClick={() => onBackdrop('light')}>
+          <Sun size={12} />浅色桌面
+        </button>
+      </div>
+    </div>
+    <LyricsPlate progress={0} opacity={preferences.opacity} currentText={LYRIC_SAMPLE.join('')} secondary={LYRIC_SAMPLE_TRANSLATION}
+      current={LYRIC_SAMPLE.map((character, at) => <span key={at} className={at < played ? 'passed' : ''}>{character}</span>)} />
+  </div>;
+}
+
+function DesktopLyricsSettings({ fonts, fontError, onLoadFonts, notice }: {
+  fonts: string[]; fontError: string; onLoadFonts(): Promise<void>; notice(text: string): void;
+}) {
+  const [preferences, setPreferences] = useState<DesktopLyricsPreferences | null>(null);
+  // While patches are in flight, broadcasts of older states must not overwrite the optimistic copy.
+  const pending = useRef(0);
+  const [backdrop, setBackdrop] = useState<'dark' | 'light'>('dark');
+  const [fontPicker, setFontPicker] = useState(false);
+  const [fontQuery, setFontQuery] = useState('');
+  useEffect(() => {
+    let cancelled = false;
+    const unsubscribe = window.desktop.desktopLyrics.onPreferences(next => { if (!pending.current) setPreferences(next); });
+    void window.desktop.desktopLyrics.getPreferences().then(next => {
+      if (cancelled) return;
+      setPreferences(next);
+      if (LYRIC_PRESETS.some(preset => preset.light && preset.colors.color === next.color)) setBackdrop('light');
+    });
+    return () => { cancelled = true; unsubscribe(); };
+  }, []);
+  if (!preferences) return <div className="settings-form"><p className="hint">正在读取桌面歌词设置…</p></div>;
+  const shown = preferences;
+
+  function update(patch: DesktopLyricsPreferencePatch) {
+    setPreferences(current => current && { ...current, ...patch });
+    pending.current += 1;
+    void window.desktop.desktopLyrics.updatePreferences(patch)
+      .then(next => { if (pending.current === 1) setPreferences(next); })
+      .catch(() => {
+        notice('桌面歌词设置保存失败，请重试。');
+        void window.desktop.desktopLyrics.getPreferences().then(setPreferences);
+      })
+      .finally(() => { pending.current -= 1; });
+  }
+  const preset = LYRIC_PRESETS.find(item => (Object.keys(item.colors) as (keyof LyricColors)[])
+    .every(key => item.colors[key] === shown[key]));
+  const visibleFonts = fontQuery.trim()
+    ? fonts.filter(name => name.toLowerCase().includes(fontQuery.trim().toLowerCase()))
+    : fonts;
+
+  return <div className="settings-form appearance-form lyric-settings">
+    <LyricPreview preferences={shown} backdrop={backdrop} onBackdrop={setBackdrop} />
+
+    <h3 className="settings-section-title">配色</h3>
+    <div className="lyric-presets" role="group" aria-label="歌词配色">
+      {LYRIC_PRESETS.map(item => <button key={item.name} className={`lyric-preset ${preset === item ? 'active' : ''}`}
+        aria-label={`歌词配色 ${item.name}`} aria-pressed={preset === item}
+        onClick={() => { update(item.colors); setBackdrop(item.light ? 'light' : 'dark'); }}>
+        <span className={`lyric-preset-sample ${item.light ? 'light' : ''}`} style={desktopLyricsStyle({ ...shown, ...item.colors, fontSize: 22 })}>
+          <LyricText text="歌词"><span className="passed">歌</span>词</LyricText>
+        </span>
+        <span className="lyric-preset-name">{item.name}</span>
+      </button>)}
+    </div>
+    <GradientColor label="未播放" start={shown.color} end={shown.colorEnd}
+      onChange={(color, colorEnd) => update({ color, colorEnd })} />
+    <GradientColor label="已播放" start={shown.playedColor} end={shown.playedColorEnd}
+      onChange={(playedColor, playedColorEnd) => update({ playedColor, playedColorEnd })} />
+    <div className="lyric-setting-row">
+      <span>描边</span>
+      <div className="color-pair">
+        <ColorDot label="描边颜色" value={shown.strokeColor} onChange={strokeColor => update({ strokeColor })} />
+        <div className="segmented" role="group" aria-label="描边粗细">
+          {([['none', '无'], ['thin', '细'], ['medium', '中'], ['thick', '粗']] as [DesktopLyricsPreferences['stroke'], string][]).map(([key, label]) =>
+            <button key={key} className={shown.stroke === key ? 'active' : ''} aria-pressed={shown.stroke === key}
+              onClick={() => update({ stroke: key })}>{label}</button>)}
+        </div>
+      </div>
+    </div>
+
+    <h3 className="settings-section-title">透明度</h3>
+    <label className="appearance-slider">
+      <span>歌词不透明度<small>{Math.round(shown.opacity * 100)}%</small></span>
+      <input type="range" aria-label="歌词不透明度" min="0.2" max="1" step="0.05" value={shown.opacity}
+        style={{ '--pct': percentOf(shown.opacity, 0.2, 1) } as CSSProperties}
+        onChange={event => update({ opacity: Number(event.target.value) })} />
+    </label>
+    <label>
+      <span>暂停时变淡</span>
+      <input type="checkbox" aria-label="暂停时变淡" checked={shown.dimWhenPaused}
+        onChange={event => update({ dimWhenPaused: event.target.checked })} />
+    </label>
+    <div className="lyric-setting-row">
+      <span>背景<small>颜色跟随描边</small></span>
+      <div className="segmented" role="group" aria-label="歌词背景">
+        {([['none', '透明字幕'], ['bar', '半透明背景条']] as [DesktopLyricsPreferences['background'], string][]).map(([key, label]) =>
+          <button key={key} className={shown.background === key ? 'active' : ''} aria-pressed={shown.background === key}
+            onClick={() => update({ background: key })}>{label}</button>)}
+      </div>
+    </div>
+    <label className="appearance-slider">
+      <span>背景不透明度<small>{Math.round(shown.backgroundOpacity * 100)}%</small></span>
+      <input type="range" aria-label="背景不透明度" min="0.1" max="0.9" step="0.05" value={shown.backgroundOpacity}
+        disabled={shown.background !== 'bar'}
+        style={{ '--pct': percentOf(shown.backgroundOpacity, 0.1, 0.9) } as CSSProperties}
+        onChange={event => update({ backgroundOpacity: Number(event.target.value) })} />
+    </label>
+
+    <h3 className="settings-section-title">字体</h3>
+    <div className="appearance-field">
+      <div className="appearance-label">
+        <span>字体</span>
+        <span className="hint">{shown.fontFamily ? <>当前：<strong>{shown.fontFamily}</strong></> : '跟随界面字体'}</span>
+      </div>
+      <div className="segmented" role="group" aria-label="歌词字体">
+        <button className={!shown.fontFamily ? 'active' : ''} aria-pressed={!shown.fontFamily}
+          onClick={() => { setFontPicker(false); update({ fontFamily: '' }); }}>跟随界面</button>
+        <button className={shown.fontFamily ? 'active' : ''} aria-pressed={!!shown.fontFamily}
+          onClick={() => { setFontPicker(true); if (!fonts.length) void onLoadFonts(); }}>系统字体…</button>
+      </div>
+      {fontPicker && fontError && <p className="hint">{fontError}</p>}
+      {fontPicker && fonts.length > 0 && <div className="font-picker">
+        <input aria-label="搜索歌词字体" placeholder={`搜索已安装字体（${fonts.length} 个）`} value={fontQuery}
+          onChange={event => setFontQuery(event.target.value)} />
+        <div className="font-list" role="listbox" aria-label="歌词可用字体">
+          {visibleFonts.length
+            ? visibleFonts.map(name => <button key={name} role="option" aria-selected={shown.fontFamily === name}
+              className={shown.fontFamily === name ? 'active' : ''} style={{ fontFamily: `"${name}"` }}
+              onClick={() => update({ fontFamily: name })}>{name}</button>)
+            : <p className="font-list-empty">没有匹配的字体。</p>}
+        </div>
+      </div>}
+    </div>
+    <div className="lyric-setting-row">
+      <span>字重</span>
+      <div className="segmented" role="group" aria-label="歌词字重">
+        {([['regular', '常规'], ['medium', '中等'], ['bold', '粗']] as [DesktopLyricsPreferences['fontWeight'], string][]).map(([key, label]) =>
+          <button key={key} className={shown.fontWeight === key ? 'active' : ''} aria-pressed={shown.fontWeight === key}
+            onClick={() => update({ fontWeight: key })}>{label}</button>)}
+      </div>
+    </div>
+    <label className="appearance-slider">
+      <span>字号<small>{shown.fontSize}px</small></span>
+      <input type="range" aria-label="歌词字号" min="18" max="64" step="2" value={shown.fontSize}
+        style={{ '--pct': percentOf(shown.fontSize, 18, 64) } as CSSProperties}
+        onChange={event => update({ fontSize: Number(event.target.value) })} />
+    </label>
+    <label className="appearance-slider">
+      <span>第二行字号<small>{Math.round(shown.secondaryScale * 100)}%</small></span>
+      <input type="range" aria-label="第二行字号" min="0.5" max="1" step="0.02" value={shown.secondaryScale}
+        style={{ '--pct': percentOf(shown.secondaryScale, 0.5, 1) } as CSSProperties}
+        onChange={event => update({ secondaryScale: Number(event.target.value) })} />
+    </label>
+    <button className="ghost" onClick={() => { update(LYRIC_STYLE_DEFAULTS); setBackdrop('dark'); }}>
+      <RotateCcw size={13} />恢复默认样式
+    </button>
+  </div>;
+}
+
+export function SettingsPage({ ctx, initialTab }: { ctx: LibraryContext; initialTab?: SettingsTab }) {
   const settings = ctx.settings;
-  const [tab, setTab] = useState<'playback' | 'appearance' | 'about'>('playback');
+  const [tab, setTab] = useState<SettingsTab>(initialTab ?? 'playback');
   const appearance = settings?.appearance;
   // Optimistic local copy: dragging a slider must repaint immediately instead of waiting for the
   // IPC round-trip, otherwise fast keyboard repeats read a stale value and drop steps.
@@ -381,9 +613,11 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
     void ctx.updateSettings({ appearance: next }).then(ok => { if (!ok) setDraft(undefined); });
   }
 
-  const tabs: { key: typeof tab; label: string }[] = [
+  const tabs: { key: typeof tab; label: string; name?: string }[] = [
     { key: 'playback', label: '播放' },
     { key: 'appearance', label: '外观' },
+    // Named apart from the player bar's 桌面歌词 switch so both stay unambiguous.
+    { key: 'desktopLyrics', label: '桌面歌词', name: '桌面歌词设置' },
     { key: 'about', label: '关于' },
   ];
 
@@ -391,7 +625,7 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
     <nav className="settings-nav" aria-label="设置分类">
       {tabs.map(item => <button key={item.key}
         className={`settings-nav-item ${tab === item.key ? 'active' : ''}`}
-        aria-current={tab === item.key ? 'page' : undefined}
+        aria-current={tab === item.key ? 'page' : undefined} aria-label={item.name}
         onClick={() => setTab(item.key)}>{item.label}</button>)}
     </nav>
     <div className="settings-panel">
@@ -519,6 +753,9 @@ export function SettingsPage({ ctx }: { ctx: LibraryContext }) {
         </div>
         <button className="ghost" onClick={() => updateAppearance({ accent: 'red', panelOpacity: 1, cornerRadius: 11, fontScale: 1, fontFamily: 'sans' })}>恢复默认外观</button>
       </div>}
+
+      {tab === 'desktopLyrics' && <DesktopLyricsSettings fonts={systemFonts} fontError={fontError}
+        onLoadFonts={loadSystemFonts} notice={ctx.notice} />}
 
       {tab === 'about' && <div className="settings-form">
         <p className="hint">

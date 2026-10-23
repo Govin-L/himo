@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  ChevronUp, Heart, Headphones, ListMusic, Minimize2, Music2, Pause, Play, SkipBack, SkipForward, Volume2, VolumeX, X,
+  ChevronUp, Heart, Headphones, ListMusic, Minimize2, Music2, Pause, PictureInPicture2, Play, Lock, Unlock, SkipBack, SkipForward, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { activeLyricIndex } from '../lyrics.mjs';
 import type { LyricsDoc, Playlist, Track } from '../shared/types';
@@ -145,9 +145,13 @@ type PlayerBarProps = {
   onToggleRepeat(): void;
   onToggleShuffle(): void;
   onToggleLyrics(): void;
+  onToggleDesktopLyrics(): void;
+  onToggleDesktopLyricsLock(): void;
   onToggleQueue(): void;
   onOpenStage(): void;
   lyricsOpen: boolean;
+  desktopLyricsOpen: boolean;
+  desktopLyricsLocked: boolean;
   queueOpen: boolean;
   queueCount: number;
   favorite: boolean | undefined;
@@ -212,6 +216,16 @@ export function PlayerBar(props: PlayerBarProps) {
       <button className="pill-button" aria-label="播放队列" aria-pressed={props.queueOpen} onClick={props.onToggleQueue} disabled={!props.queueCount}>
         队列 {props.queueCount}
       </button>
+      <button className="icon-button" aria-label="桌面歌词" title="桌面歌词"
+        aria-pressed={props.desktopLyricsOpen} onClick={props.onToggleDesktopLyrics}>
+        <PictureInPicture2 size={16} />
+      </button>
+      {props.desktopLyricsOpen && <button className="icon-button"
+        aria-label={props.desktopLyricsLocked ? '解锁桌面歌词' : '锁定桌面歌词'}
+        title={props.desktopLyricsLocked ? '解锁桌面歌词' : '锁定并穿透鼠标'}
+        aria-pressed={props.desktopLyricsLocked} onClick={props.onToggleDesktopLyricsLock}>
+        {props.desktopLyricsLocked ? <Lock size={14} /> : <Unlock size={14} />}
+      </button>}
       <button className="icon-button" aria-label={volume > 0 ? '静音' : '取消静音'} onClick={props.onToggleMute}>
         {volume > 0 ? <Volume2 size={16} /> : <VolumeX size={16} />}
       </button>
@@ -379,9 +393,10 @@ export function LyricsStage({
           <Minimize2 size={13} />{following ? '跟随中' : '已暂停'}
         </button>
         <div className="stage-tool" style={{ gap: 2 }}>
-          <button aria-label="歌词提前" onClick={() => onOffset(-0.5)} disabled={!doc?.synced}>−</button>
+          {/* A positive offset reads ahead of the audio, so + shows the lines earlier. */}
+          <button aria-label="歌词延后" onClick={() => onOffset(-0.5)} disabled={!doc?.synced}>−</button>
           <span className="offset">{(offsetSeconds > 0 ? '+' : '') + offsetSeconds.toFixed(1)}s</span>
-          <button aria-label="歌词延后" onClick={() => onOffset(0.5)} disabled={!doc?.synced}>+</button>
+          <button aria-label="歌词提前" onClick={() => onOffset(0.5)} disabled={!doc?.synced}>+</button>
         </div>
       </div>
     </footer>

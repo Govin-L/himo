@@ -5,7 +5,7 @@ import {
 import { LyricsPanel, LyricsStage, PlayerBar, QueuePanel } from './components';
 import {
   AlbumPage, ArtistPage, HistoryPage, PlaylistsPage, PlaylistDetailPage, SearchPage,
-  SettingsPage, type LibraryContext,
+  SettingsPage, type LibraryContext, type SettingsTab,
 } from './pages';
 import { FavoritesPage } from './favorites-page';
 import { APP_BRAND_LABEL } from '../shared/app-name.mjs';
@@ -19,7 +19,9 @@ import type {
 } from '../shared/types';
 
 type View =
-  | { name: 'favorites' } | { name: 'playlists' } | { name: 'search' } | { name: 'history' } | { name: 'settings' }
+  | { name: 'favorites' } | { name: 'playlists' } | { name: 'search' } | { name: 'history' }
+  // `request` remounts the page so a repeated request from the lyrics window reopens its tab.
+  | { name: 'settings'; tab?: SettingsTab; request?: number }
   | { name: 'playlist'; playlist: Playlist }
   | { name: 'album'; albumId: string }
   | { name: 'artist'; artistId: string };
@@ -111,6 +113,8 @@ export function App() {
   const [actualQuality, setActualQuality] = useState<'standard' | 'lossless' | 'unknown'>('unknown');
   const [lyrics, setLyrics] = useState<LyricsDoc | null>(null);
   const [lyricsOpen, setLyricsOpen] = useState(false);
+  const [desktopLyricsVisible, setDesktopLyricsVisible] = useState(false);
+  const [desktopLyricsLocked, setDesktopLyricsLocked] = useState(false);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
   const [lyricOffset, setLyricOffset] = useState(0);
@@ -332,9 +336,20 @@ export function App() {
     } catch { /* Position state is best effort. */ }
   }, [position, duration]);
 
-  // Lyrics load once per track while either surface (drawer or full stage) is visible.
   useEffect(() => {
-    if (!lyricsOpen && !stageOpen) return;
+    const unsubscribe = window.desktop.desktopLyrics.onVisibility(setDesktopLyricsVisible);
+    const unsubscribePreferences = window.desktop.desktopLyrics.onPreferences(next => setDesktopLyricsLocked(next.locked));
+    const unsubscribeSettings = window.desktop.desktopLyrics.onShowSettings(() => {
+      setView({ name: 'settings', tab: 'desktopLyrics', request: Date.now() });
+    });
+    void window.desktop.desktopLyrics.getVisible().then(setDesktopLyricsVisible);
+    void window.desktop.desktopLyrics.getPreferences().then(next => setDesktopLyricsLocked(next.locked));
+    return () => { unsubscribe(); unsubscribePreferences(); unsubscribeSettings(); };
+  }, []);
+
+  // All lyric surfaces share one request/cache, including the independent desktop window.
+  useEffect(() => {
+    if (!lyricsOpen && !stageOpen && !desktopLyricsVisible) return;
     const trackId = currentTrack?.id;
     if (!trackId) { setLyrics(null); return; }
     setLyricOffset(readLyricOffset(trackId));
@@ -364,7 +379,20 @@ export function App() {
       setLyrics(null); setLyricsLoading(false);
     });
     return () => { cancelled = true; };
-  }, [lyricsOpen, stageOpen, currentTrack?.id, lyricRevision]);
+  }, [lyricsOpen, stageOpen, desktopLyricsVisible, currentTrack?.id, lyricRevision]);
+
+  useEffect(() => {
+    if (!desktopLyricsVisible) return;
+    void window.desktop.desktopLyrics.publish({
+      track: currentTrack ? {
+        id: currentTrack.id, title: currentTrack.title,
+        artist: currentTrack.artists.map(artist => artist.name).join(' / '),
+      } : null,
+      // Never send the previous track's lyrics during the next track's loading render.
+      lyrics: currentTrack && lyricCache.current.get(currentTrack.id) === lyrics ? lyrics : null,
+      loading: lyricsLoading, playing, buffering, positionSeconds: position, offsetSeconds: lyricOffset, durationSeconds: duration,
+    }).catch(() => {});
+  }, [desktopLyricsVisible, currentTrack, lyrics, lyricsLoading, playing, buffering, position, lyricOffset, duration]);
 
   async function importLocalLyrics() {
     const trackId = currentTrack?.id;
@@ -729,7 +757,7 @@ export function App() {
       case 'playlist': return <PlaylistDetailPage ctx={ctx} playlist={view.playlist} />;
       case 'search': return <SearchPage ctx={ctx} />;
       case 'history': return <HistoryPage ctx={ctx} />;
-      case 'settings': return <SettingsPage ctx={ctx} />;
+      case 'settings': return <SettingsPage key={view.request ?? 0} ctx={ctx} initialTab={view.tab} />;
       case 'album': return <AlbumPage ctx={ctx} albumId={view.albumId} />;
       case 'artist': return <ArtistPage ctx={ctx} artistId={view.artistId} />;
     }
@@ -852,6 +880,16 @@ export function App() {
       onToggleQueue={() => setQueueOpen(value => { if (!value) setLyricsOpen(false); return !value; })}
       onOpenStage={() => setStageOpen(true)}
       lyricsOpen={lyricsOpen}
+      desktopLyricsOpen={desktopLyricsVisible}
+      desktopLyricsLocked={desktopLyricsLocked}
+      onToggleDesktopLyricsLock={() => {
+        void window.desktop.desktopLyrics.updatePreferences({ locked: !desktopLyricsLocked })
+          .catch(() => setMessage('无法更改歌词锁定状态，请重试。'));
+      }}
+      onToggleDesktopLyrics={() => {
+        void window.desktop.desktopLyrics.setVisible(!desktopLyricsVisible)
+          .then(setDesktopLyricsVisible).catch(() => setMessage('无法切换桌面歌词，请重试。'));
+      }}
       queueOpen={queueOpen}
       queueCount={queue.length}
       favorite={currentTrack ? favoriteOf(currentTrack.id) : undefined}

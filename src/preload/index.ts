@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron';
 import { channels } from '../shared/channels';
-import type { DesktopApi } from '../shared/types';
+import type { DesktopApi, DesktopLyricsOverlayApi, DesktopLyricsPreferences, DesktopLyricsState } from '../shared/types';
 
 const api: DesktopApi = {
   auth: {
@@ -54,6 +54,28 @@ const api: DesktopApi = {
     setCloseBehavior: input => ipcRenderer.invoke(channels.windowSetCloseBehavior, input),
   },
   app: { quit: () => ipcRenderer.invoke(channels.appQuit) },
+  desktopLyrics: {
+    setVisible: visible => ipcRenderer.invoke(channels.desktopLyricsSetVisible, visible),
+    getVisible: () => ipcRenderer.invoke(channels.desktopLyricsGetVisible),
+    getPreferences: () => ipcRenderer.invoke(channels.desktopLyricsGetPreferences),
+    updatePreferences: input => ipcRenderer.invoke(channels.desktopLyricsUpdatePreferences, input),
+    onPreferences: listener => {
+      const wrapped = (_event: Electron.IpcRendererEvent, preferences: DesktopLyricsPreferences) => listener(preferences);
+      ipcRenderer.on(channels.desktopLyricsPreferences, wrapped);
+      return () => ipcRenderer.removeListener(channels.desktopLyricsPreferences, wrapped);
+    },
+    publish: state => ipcRenderer.invoke(channels.desktopLyricsPublish, state),
+    onVisibility: listener => {
+      const wrapped = (_event: Electron.IpcRendererEvent, visible: boolean) => listener(visible);
+      ipcRenderer.on(channels.desktopLyricsVisibility, wrapped);
+      return () => ipcRenderer.removeListener(channels.desktopLyricsVisibility, wrapped);
+    },
+    onShowSettings: listener => {
+      const wrapped = () => listener();
+      ipcRenderer.on(channels.desktopLyricsShowSettings, wrapped);
+      return () => ipcRenderer.removeListener(channels.desktopLyricsShowSettings, wrapped);
+    },
+  },
   player: {
     onCommand: listener => {
       const wrapped = (_event: Electron.IpcRendererEvent, command: 'play-pause' | 'next' | 'previous') => listener(command);
@@ -68,4 +90,26 @@ const api: DesktopApi = {
   },
 };
 
-contextBridge.exposeInMainWorld('desktop', api);
+if (process.argv.includes('--desktop-lyrics-overlay')) {
+  const overlay: DesktopLyricsOverlayApi = {
+    getState: () => ipcRenderer.invoke(channels.desktopLyricsReadState),
+    getPreferences: () => ipcRenderer.invoke(channels.desktopLyricsGetPreferences),
+    updatePreferences: input => ipcRenderer.invoke(channels.desktopLyricsUpdatePreferences, input),
+    onPreferences: listener => {
+      const wrapped = (_event: Electron.IpcRendererEvent, preferences: DesktopLyricsPreferences) => listener(preferences);
+      ipcRenderer.on(channels.desktopLyricsPreferences, wrapped);
+      return () => ipcRenderer.removeListener(channels.desktopLyricsPreferences, wrapped);
+    },
+    onState: listener => {
+      const wrapped = (_event: Electron.IpcRendererEvent, state: DesktopLyricsState) => listener(state);
+      ipcRenderer.on(channels.desktopLyricsState, wrapped);
+      return () => ipcRenderer.removeListener(channels.desktopLyricsState, wrapped);
+    },
+    close: () => ipcRenderer.invoke(channels.desktopLyricsClose),
+    move: position => ipcRenderer.invoke(channels.desktopLyricsMove, position),
+    openSettings: () => ipcRenderer.invoke(channels.desktopLyricsOpenSettings),
+  };
+  contextBridge.exposeInMainWorld('desktopLyricsOverlay', overlay);
+} else {
+  contextBridge.exposeInMainWorld('desktop', api);
+}

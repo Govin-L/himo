@@ -1,0 +1,158 @@
+body.desktop-lyrics-root {
+  min-width: 0;
+  min-height: 0;
+  background: transparent;
+  color: #fff9e7;
+  user-select: none;
+}
+.desktop-lyrics-root #root { height: 100%; }
+.desktop-lyrics-window {
+  position: relative;
+  isolation: isolate;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 6px 12px 10px;
+  border: 0;
+  background: transparent;
+}
+
+/* Hover chrome, after QQ 音乐: a translucent panel marks the draggable area and a centred icon bar
+   sits on top. Locked lyrics show neither. */
+.desktop-lyrics-window::before {
+  content: '';
+  position: absolute;
+  inset: 2px 4px 4px;
+  z-index: -1;
+  border-radius: 16px;
+  background: rgba(14, 16, 21, 0.36);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transition: opacity 160ms ease;
+  pointer-events: none;
+}
+.desktop-lyrics-window:not(.locked):hover::before { opacity: 1; }
+.desktop-lyrics-header {
+  height: 36px;
+  flex: 0 0 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  visibility: hidden;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 160ms ease, transform 160ms ease, visibility 160ms;
+}
+.desktop-lyrics-window:not(.locked):hover .desktop-lyrics-header,
+.desktop-lyrics-window:not(.locked):focus-within .desktop-lyrics-header { visibility: visible; opacity: 1; transform: none; }
+.desktop-lyrics-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px 6px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(28, 30, 36, 0.9);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.28);
+}
+.desktop-lyrics-toolbar button {
+  display: grid;
+  place-items: center;
+  width: 30px;
+  height: 28px;
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.86);
+  transition: background 120ms ease, color 120ms ease, transform 120ms ease;
+}
+.desktop-lyrics-toolbar button:hover:not(:disabled) { background: rgba(255, 255, 255, 0.14); color: #fff; }
+.desktop-lyrics-toolbar button:active:not(:disabled) { transform: scale(0.92); }
+.desktop-lyrics-toolbar button:disabled { opacity: 0.32; }
+.desktop-lyrics-divider { width: 1px; height: 14px; margin: 0 4px; background: rgba(255, 255, 255, 0.16); }
+.desktop-lyrics-toast {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(200, 32, 46, 0.92);
+  color: #fff;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+/* Lyrics: an optional translucent plate that hugs the text. */
+.desktop-lyrics-lines {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.desktop-lyrics-plate {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 1px;
+  max-width: 100%;
+  padding: 3px 14px;
+  border-radius: 16px;
+  /* The plate takes the outline colour: dark outlines get a dark plate, white outlines a light one. */
+  background: color-mix(in srgb, var(--lyric-stroke-color, #000) calc(var(--lyric-plate-opacity, 0) * 100%), transparent);
+  transition: background-color 180ms ease;
+}
+.desktop-lyrics-current, .desktop-lyrics-secondary {
+  max-width: 100%;
+  margin: 0;
+  padding: 3px 0;
+  overflow: hidden;
+  text-align: center;
+  white-space: nowrap;
+  line-height: 1.35;
+  font-family: var(--lyric-font, var(--font-ui));
+  font-weight: var(--lyric-weight, 700);
+  opacity: var(--lyric-text-opacity, 1);
+  transition: opacity 220ms ease;
+}
+.desktop-lyrics-current { font-size: var(--desktop-lyrics-size, 36px); }
+.desktop-lyrics-secondary {
+  font-size: calc(var(--desktop-lyrics-size, 36px) * var(--lyric-secondary-scale, 0.64));
+  font-weight: calc(var(--lyric-weight, 700) - 100);
+}
+
+/* Two stacked layers: the plain text with a doubled stroke underneath, the fill on top. The fill
+   hides the stroke's inner half, so gradients keep crisp edges and only an outer outline shows.
+   Side padding keeps the outline of the first and last glyph from being clipped. */
+.desktop-lyrics-text {
+  display: grid;
+  width: max-content;
+  min-width: 100%;
+  max-width: none;
+  padding: 0 6px;
+  transition: transform 160ms linear;
+}
+.desktop-lyrics-text::before,
+.desktop-lyrics-fill { grid-area: 1 / 1; }
+.desktop-lyrics-text::before {
+  /* Empty alt text keeps screen readers from reading the duplicated outline text. */
+  content: attr(data-text);
+  content: attr(data-text) / '';
+  color: var(--lyric-stroke-color, #000);
+  -webkit-text-stroke: var(--lyric-stroke, 3px) var(--lyric-stroke-color, #000);
+  text-shadow: 0 2px 6px color-mix(in srgb, var(--lyric-stroke-color, #000) 55%, transparent);
+}
+.desktop-lyrics-secondary .desktop-lyrics-text::before { -webkit-text-stroke-width: calc(var(--lyric-stroke, 3px) * 0.6); }
+.desktop-lyrics-fill {
+  color: transparent;
+  background-image: linear-gradient(to bottom, var(--lyric-color, #fff1b8), var(--lyric-color-end, #fff1b8));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+.desktop-lyrics-fill .passed {
+  background-image: linear-gradient(to bottom, var(--lyric-played, #ffd65c), var(--lyric-played-end, #ffd65c));
+  -webkit-background-clip: text;
+  background-clip: text;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .desktop-lyrics-text, .desktop-lyrics-header, .desktop-lyrics-window::before,
+  .desktop-lyrics-current, .desktop-lyrics-secondary { transition: none; }
+}

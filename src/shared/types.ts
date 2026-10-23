@@ -60,6 +60,55 @@ export type LyricsDoc = {
   matchedArtist?: string;
 };
 export type LyricsCacheInfo = { bytes: number; entries: number; localBytes: number; localEntries: number };
+export type DesktopLyricsStroke = 'none' | 'thin' | 'medium' | 'thick';
+export type DesktopLyricsFontWeight = 'regular' | 'medium' | 'bold';
+export type DesktopLyricsPreferences = {
+  position: { x: number; y: number } | null;
+  fontSize: number;
+  locked: boolean;
+  /** Lyric text opacity, 0.2–1; the toolbar is never faded. */
+  opacity: number;
+  dimWhenPaused: boolean;
+  /** 'bar' draws a translucent plate behind the lines; 'none' keeps bare outlined subtitles. */
+  background: 'none' | 'bar';
+  backgroundOpacity: number;
+  /** #rrggbb colours; an `End` colour turns the fill into a top-to-bottom gradient. */
+  color: string;
+  colorEnd: string | null;
+  playedColor: string;
+  playedColorEnd: string | null;
+  strokeColor: string;
+  stroke: DesktopLyricsStroke;
+  /** Installed font family; empty follows the app font. */
+  fontFamily: string;
+  fontWeight: DesktopLyricsFontWeight;
+  /** Second line size relative to the current line, 0.5–1. */
+  secondaryScale: number;
+};
+/** Everything but the position, which only the main process records. */
+export type DesktopLyricsPreferencePatch = Partial<Omit<DesktopLyricsPreferences, 'position'>>;
+export type DesktopLyricsState = {
+  track: { id: string; title: string; artist: string } | null;
+  lyrics: LyricsDoc | null;
+  loading: boolean;
+  playing: boolean;
+  buffering: boolean;
+  positionSeconds: number;
+  offsetSeconds: number;
+  durationSeconds: number;
+};
+export type DesktopLyricsOverlayApi = {
+  getState(): Promise<DesktopLyricsState | null>;
+  onState(listener: (state: DesktopLyricsState) => void): () => void;
+  close(): Promise<void>;
+  /** Moves the overlay to a screen position; dragging is done in the page, not by an OS drag region. */
+  move(position: { x: number; y: number }): Promise<void>;
+  /** Brings the main window forward on the desktop lyrics settings. */
+  openSettings(): Promise<void>;
+  getPreferences(): Promise<DesktopLyricsPreferences>;
+  updatePreferences(input: DesktopLyricsPreferencePatch): Promise<DesktopLyricsPreferences>;
+  onPreferences(listener: (preferences: DesktopLyricsPreferences) => void): () => void;
+};
 export type AlbumDetail = {
   album: { id: string; title: string; coverUrl?: string; count?: number; artists: { id?: string; name: string }[] };
   tracks: Track[];
@@ -107,6 +156,7 @@ export type AppSettings = {
   repeatMode: RepeatMode;
   shuffle: boolean;
   appearance: AppearanceSettings;
+  desktopLyrics: DesktopLyricsPreferences;
   // Report real playback to Huawei history. Endpoint shape comes from the public H5 bundle;
   // real-account acceptance is still pending, so failures stay silent and are never retried.
   syncHistory: boolean;
@@ -170,8 +220,19 @@ export type DesktopApi = {
     clearCache(input?: { local?: boolean }): Promise<Result<LyricsCacheInfo>>;
   };
   app: { quit(): Promise<void> };
+  desktopLyrics: {
+    setVisible(visible: boolean): Promise<boolean>;
+    getVisible(): Promise<boolean>;
+    publish(state: DesktopLyricsState): Promise<void>;
+    getPreferences(): Promise<DesktopLyricsPreferences>;
+    updatePreferences(input: DesktopLyricsPreferencePatch): Promise<DesktopLyricsPreferences>;
+    onPreferences(listener: (preferences: DesktopLyricsPreferences) => void): () => void;
+    onVisibility(listener: (visible: boolean) => void): () => void;
+    /** The overlay's settings button asked for the desktop lyrics settings page. */
+    onShowSettings(listener: () => void): () => void;
+  };
   player: { onCommand(listener: (command: 'play-pause' | 'next' | 'previous') => void): () => void };
   onNotice(listener: (message: string) => void): () => void;
 };
 
-declare global { interface Window { desktop: DesktopApi } }
+declare global { interface Window { desktop: DesktopApi; desktopLyricsOverlay: DesktopLyricsOverlayApi } }
