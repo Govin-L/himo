@@ -36,6 +36,8 @@ https://github.com/talongao/huawei-music-desktop
   相关记录见 docs/API_CONTRACT.md 与 docs/authorized-feature-validation.md。
 - 代码许可不代表获得华为服务、接口、商标或音乐内容的任何许可；详见 README 的
   免责声明与使用边界。
+- himo 为非官方项目标识，不表示华为的授权、认可或合作；所提及的服务名称仅说明兼容对象。
+  本项目的名称、图标和公开源码不构成无侵权或服务可用性保证，亦不承诺维护期限、响应或后续功能。
 
 electron-liquid-glass — MIT License
 ----------------------------------

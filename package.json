@@ -78,6 +78,11 @@
       "out/main/native-control-glass.node",
       "node_modules/electron-liquid-glass/prebuilds/**/*"
     ],
+    "extraResources": [
+      { "from": "LICENSE", "to": "licenses/AGPL-3.0.txt" },
+      { "from": "NOTICE", "to": "licenses/NOTICE" },
+      { "from": "build/icon.LICENSE.txt", "to": "licenses/icon.LICENSE.txt" }
+    ],
     "npmRebuild": false,
     "publish": null,
     "artifactName": "${productName}-${version}-${os}-${arch}-internal.${ext}",
