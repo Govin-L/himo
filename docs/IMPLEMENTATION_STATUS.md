@@ -2,6 +2,13 @@
 
 更新时间：2026-10-23。当前以 **Linux 真实 Electron 环境**完成共享 API、业务逻辑、页面和播放器验证；Windows/macOS 不阻塞开发，不使用 Wine 作为运行/验收依赖。不对外发布。
 
+## 个人 Fork 开发基建（2026-10-23）
+
+- verified（macOS arm64）：已移除唯一的 CI 工作流 `windows-installer.yml`；提交和推送不自动构建或发布。保留原生打包入口与历史研究记录。
+- 新增 `dev` / `dev:mock` 自动重建和重启循环、`preview` 离线预览、`check` 与 `verify` 本地检查。开发实例使用独立临时数据目录；未引入开发服务器或放宽 CSP、导航和 IPC 来源校验。
+- README、NOTICE 注明 fork 来源、分叉基线 `3fd6731`、修改内容与日期；新增 `docs/DEVELOPMENT.md`，同步 AGENTS 工作规则、`.editorconfig`、`.nvmrc`。移除未使用的 Vitest 及其独占依赖，其余锁定版本和完整性未变。
+- 本轮验证：`verify` 通过（类型检查、180 项 Node 单测、三部分构建、桌面歌词 Electron 回归）；发行内容检查通过（171 个文件 / 200 个归档条目）。`dev`、`dev:mock` 均实测首次启动、源码文件变化后约 1.1–1.2 秒重建、旧进程退出并启动新实例、Ctrl+C 后无本轮 Electron 主进程残留；`preview` 实际启动，主进程与 renderer 保持运行。开发循环验收只触发文件变化事件，未改动业务源码、未登录真实账号；未另做界面点击或截图验收。Windows/Linux 的新开发循环未做本轮运行验证。
+
 ## 透明桌面歌词（2026-10-22，10-23 修正）
 
 - verified（macOS arm64 源码版）：独立、透明、无边框置顶歌词窗口，字号可调 18–64px。锁定后隐藏工具栏并调用原生鼠标穿透、禁止聚焦；主播放栏提供解锁入口。位置、字号与锁定状态保存在现有设置文件，恢复时限制到当前屏幕工作区。
@@ -30,7 +37,7 @@
 | M3 播放器日用能力 | in-progress | 单 Audio、顺序/随机/循环、音量/seek、音质选择、歌词高亮/手动滚动暂停跟随、队列恢复不自动播放。本轮补全歌词：解析词级 `<mm:ss.xx>` 逐字时间、同时间戳双语合并为翻译行、忽略 `[ti:][ar:]` 等元数据、主进程按曲缓存 LRC 结果；新增沉浸歌词页（点击行跳转、进度拖动、±0.5s 偏移按曲记忆、滚轮暂停跟随、Esc 退出）。设置同步、媒体键旧闭包与初始化队列竞态已修。965 首队列真实磁盘读回完整且无播放 URL。真实 CDN/听播、过期资源和睡眠恢复仍未验收。 |
 | M4 受控写操作 | in-progress | 主进程串行写，收藏幂等读回；简介/删除先确认当前账号 owned，再读回核对。创建保留本次基线与未决意图，超时不重发，进程重启仍阻止盲目重复创建。生产业务集成测试使用合成响应通过。历史真实接口写验证及 added=0/removed=0 证据仍有效；**新桌面写路径没有当前授权下的真实写验收**。 |
 | M5 视觉与系统集成 | in-progress | 视觉整体重做：浮起玻璃面板、窄侧栏、无边框内容、独立播放坞；配色与图标体系自定（暖白中性色 + 默认华为红）。CSS 变量化设计系统，960/1100 两档响应式。设置改为二级分类（播放/外观/关于），外观可调主题色、面板透明度、圆角、字号、字体，写入设置并实时生效。沉浸歌词改为左侧封面 + 右侧居中歌词。Linux Electron 实际截图覆盖 1180×760、960×640、歌词抽屉与沉浸歌词页、队列抽屉、965 首长列表。**新视觉未经用户最终确认，不宣称定稿**。托盘/关闭/媒体键有代码，物理媒体键、无托盘桌面及睡眠恢复仍待验。 |
-| M6 发行工程 | in-progress | Linux x64 AppImage 已构建；从实际 AppImage 提取二进制并启动隔离 profile，核对打包文件与当前 out 一致、renderer 无 Node、设置可保存，全部通过。Windows 目标已按要求改为 **NSIS 安装包**，单文件 portable 构建入口、校验脚本与 CI 工作流已删除（`dist:win:portable`、`test:windows-portable`、`windows-portable.yml`）。安装包只能在原生 Windows 上构建，本机 Linux 不产出；CI（`windows-installer.yml`）已切到 `dist:win` + `test:windows-installer`，**尚未在 Windows runner 上实跑，安装/启动/播放均未验收**。macOS arm64/x64 DMG 入口保留。deb 等待真实主页/维护者身份，不编造。 |
+| M6 发行工程 | in-progress | Linux x64 AppImage 已构建；从实际 AppImage 提取二进制并启动隔离 profile，核对打包文件与当前 out 一致、renderer 无 Node、设置可保存，全部通过。Windows 目标已按要求改为 **NSIS 安装包**，单文件 portable 构建入口、校验脚本与 CI 工作流已删除（`dist:win:portable`、`test:windows-portable`、`windows-portable.yml`）。安装包只能在原生 Windows 上构建；本 Fork 已移除 CI，使用本地 `dist:win` + `test:windows-installer`，**安装/启动/播放仍未完成人工验收**。macOS arm64/x64 DMG 入口保留。deb 等待真实主页/维护者身份，不编造。 |
 
 ## UI 重做与歌词能力（2026-10-18）
 
@@ -77,7 +84,9 @@
 - 作者选择方案 B：仓库开源（AGPL-3.0）并保留现状；后续按作者要求恢复 **GitHub Release 发布**（未签名学习构建，发布说明写明未签名、非官方、OAuth 身份不属于本项目）。OSS 上的历史二进制已删除并验证 404；不再使用第三方对象存储分发。
 - GitHub 仓库转为公开；Gitee 仍私有。
 
-## CI：GitHub Actions 原生 Windows 打包（已跑通）
+## CI：GitHub Actions 原生 Windows 打包（上游历史记录）
+
+> 本节保留历史证据。本 Fork 已于 2026-10-23 移除所有 workflow，当前只通过本地命令检查和打包。
 
 - 仓库镜像到 GitHub 私有仓库（`talongao/huawei-music-desktop`），CI 工作流 `windows-installer.yml`（原 `windows-portable.yml`）：手动或 `v*` 标签触发，windows-latest 上执行 `npm ci` → 单元测试 → `dist:win` → 安装包静态校验 → SHA256SUMS，发布到 GitHub Release；不上传 OSS。改动后尚未在 Windows runner 上实跑。
 - 产物发布：手动运行或 `v*` 标签会创建/更新对应标签的 GitHub Release（exe + SHA256SUMS），不自动传 OSS；标签与 `package.json` 版本不一致会失败。

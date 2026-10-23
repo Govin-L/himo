@@ -8,18 +8,32 @@
 
 **English**: An unofficial, study-only desktop client for Huawei Music, built with Electron + React + TypeScript. It signs in with your own Huawei account, reads your own library, and plays the original Huawei Music audio your account is already entitled to. Not affiliated with or authorized by Huawei. Licensed AGPL-3.0; review the disclaimer before redistributing binaries.
 
+## 关于本 Fork
+
+本仓库 [Govin-L/huawei-music-desktop](https://github.com/Govin-L/huawei-music-desktop) fork 自 [talongao/huawei-music-desktop](https://github.com/talongao/huawei-music-desktop)，以提交 [`3fd6731`](https://github.com/talongao/huawei-music-desktop/commit/3fd67319fa4b4a10de00d6da7d88e4e52ebd8327) 为分叉基线。感谢上游作者完成客户端、协议研究和基础工程。
+
+本 Fork 自 2026-10-22 起独立维护，主要改动：
+
+- 修复 macOS 菜单栏图标与 Retina 模板图。
+- 增加独立透明桌面歌词，支持播放同步、拖动、锁定穿透、位置记忆和配色、描边、不透明度、字体等设置。
+- 提供无需登录的合成曲库预览、自动重建与重启、本地检查命令和开发指南。
+- 移除所有 CI 工作流，检查与打包在本地显式执行。
+
+后续迭代以本 Fork 为准，上游改动按需手动同步，不以合并回上游为前提。保留原项目的版权、AGPL-3.0 许可和第三方归属，修改声明见 [NOTICE](NOTICE)。开发和同步步骤见 [开发指南](docs/DEVELOPMENT.md)。
+
 ---
 
 ## 目录
 
-- [当前状态](#当前状态) · [截图](#截图) · [快速开始](#快速开始) · [功能范围](#功能范围)
-- [构建与打包](#构建与打包) · [持续集成](#持续集成github-actions) · [测试](#测试)
+- [关于本 Fork](#关于本-fork) · [当前状态](#当前状态) · [截图](#截图)
+- [快速开始](#快速开始) · [开发](#开发) · [功能范围](#功能范围)
+- [构建与打包](#构建与打包) · [测试](#测试)
 - [架构与安全边界](#架构与安全边界) · [数据与隐私](#数据与隐私) · [已知限制](#已知限制与非目标)
 - [参与贡献](#参与贡献) · [第三方组件](#第三方组件与致谢) · [许可](#许可) · [免责声明](#免责声明与使用边界)
 
 ## 当前状态
 
-项目处于**早期开发阶段**：Linux 上完成了较完整的验证，Windows 与 macOS 尚无真机验收。下表区分“已实测”和“代码已写但未验证”，不以构建成功代替验收。
+项目处于**早期开发阶段**：上游主要在 Linux 上验证共享业务与播放器；本 Fork 补充了 macOS arm64 的菜单栏图标和桌面歌词源码验证。下表与实现状态文档区分已实测和待验收范围，不以构建成功代替完整验收。
 
 | 能力 | 状态 | 证据 / 未验证 |
 |---|---|---|
@@ -30,8 +44,8 @@
 | 华为音源真实播放 | **未验收** | 需要真实会员资源的 Electron 全曲播放证据，目前只有协议层与合成音频证据 |
 | 写操作（收藏、建歌单、改简介、删自建歌单） | 协议层已实测，桌面路径未验收 | 写操作在主进程做归属校验、串行化、写后读回；不会盲重试 |
 | 播放历史同步 | 代码已写，**未验证** | 按公开 H5 形态上报，达到收听阈值才报一次、秒数为实际收听、失败静默；真实账号效果未确认 |
-| 托盘 / 关闭行为 / 媒体键 | 已实现 | Windows/macOS 真机与物理媒体键未验收 |
-| 三端安装包 | 仅 Linux 已验证 | Linux AppImage 已构建并启动验证；Windows NSIS 安装包由 CI 原生构建（未在 Windows 真机运行/安装）；macOS 未构建 |
+| 托盘 / 关闭行为 / 媒体键 | 部分验证 | macOS arm64 菜单栏图标已验证；物理媒体键与其他平台待验收 |
+| 三端安装包 | 部分验证 | Linux AppImage 与 macOS arm64 图标修复版 DMG 有构建/启动证据；最新桌面歌词未更新安装版；Windows NSIS 需在 Windows 本机构建并验收 |
 
 更细的进度与证据见 [实现状态](docs/IMPLEMENTATION_STATUS.md)。
 
@@ -52,16 +66,28 @@
 需要 **Node.js 22.15+** 和一个可用的桌面环境（Linux 无头环境请用 `xvfb-run`）：
 
 ```sh
-git clone https://github.com/talongao/huawei-music-desktop.git
+git clone https://github.com/Govin-L/huawei-music-desktop.git
 cd huawei-music-desktop
 npm ci
 npm start
 ```
 
-`npm start` 会先构建再启动本地 Electron（`npm run dev` 当前等同，不提供热更新）。首次使用点击“扫码登录”，在**华为官方页面**完成扫码；核对页面显示的应用与权限后再决定是否授权。
+`npm start` 会先检查类型并构建，再启动本地 Electron；开发时使用下节的 `dev` / `dev:mock`。首次使用点击“扫码登录”，在**华为官方页面**完成扫码；核对页面显示的应用与权限后再决定是否授权。
 
 - 以 root 运行时启动器会加进程级 `--no-sandbox`（仅开发便利），应用窗口自身仍启用 `sandbox` / `contextIsolation` / `webSecurity`。正式验收请用普通用户。
 - 代理：主进程 HTTP、Chromium 登录/播放会读取进程级 `HTTP_PROXY` / `HTTPS_PROXY` / `ALL_PROXY` / `NO_PROXY`，**不修改系统代理**；暂不支持 SOCKS/PAC 与代理认证，配置无效时明确报错退出而不是直连。
+
+## 开发
+
+```sh
+npm run dev:mock   # 免登录的离线开发：保存 src/ 后自动重建并重启
+npm run dev        # 真实应用开发：在独立开发实例中自行登录
+npm run preview    # 检查类型并构建一次，打开离线合成曲库供人工验收
+npm run check      # 类型检查 + 全部 Node 离线单测
+npm run verify     # check + 生产构建 + 桌面歌词 Electron 回归
+```
+
+开发循环使用生产构建文件，保存后重启整个应用，不是页面热更新；构建失败时保留正在运行的实例，修复并保存即可重试。开发目录与安装版数据分开，具体位置、调试入口、代码结构和贡献流程见 [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md)。
 
 ## 功能范围
 
@@ -130,7 +156,7 @@ npm run test:packaged -- release/linux-x64/huawei-music-desktop-0.0.1-linux-x86_
 npm run dist:mac:arm64           # 或 dist:mac:x64，必须在 macOS 上运行
 ```
 
-未在本项目 CI 构建，也未做真机验收。签名/公证需要作者自己的证书，缺失时视为内部未签名构建。
+macOS arm64 图标修复版曾完成 DMG 构建与启动核验；最新改动需重新构建安装包，x64 尚未验收。签名/公证需要维护者自己的证书，缺失时视为内部未签名构建。
 
 ### 5. 发行内容与校验和
 
@@ -139,16 +165,7 @@ npm run test:release-contents    # 按 build.files 白名单模拟打包，断�
 node scripts/release-checksums.mjs release/<dir>   # 生成 SHA256SUMS（不自动上传）
 ```
 
-## 持续集成（GitHub Actions）
-
-工作流：[`.github/workflows/windows-installer.yml`](.github/workflows/windows-installer.yml)，在 **windows-latest** 上原生构建 Windows 安装包。
-
-- 步骤：`npm ci` → 单元测试 → `dist:win` → 安装包静态校验 → `SHA256SUMS`。
-- 触发：推送到 `main`（自动构建并刷新 Release）、推送 `v*` 标签，或从 Actions 页面手动运行（可勾选 `smoke`）。
-- **产物发布到 GitHub Release**：推送 `main`、推送 `v*` 标签或手动运行（`release` 默认勾选）时，会把 exe 与 `SHA256SUMS` 附到对应 Release（`main` 构建使用 `v<package.json 版本>`，已有资产会被覆盖；标签与版本不一致直接失败）。发布说明会写明未签名、非官方、OAuth 身份不属于本项目等事项。只有手动取消发布时才回退到 Actions artifact（3 天）。
-- 可选的 `smoke` 会在 Windows 上额外跑一次 Electron 烟测（步骤内 `choco install ffmpeg` 造音频夹具）；它失败不阻断构建，但会在日志中报错。
-- Fork 后可直接复用，无需任何密钥（工作流使用仓库自带的 `GITHUB_TOKEN`，权限为 `contents: write` 以便发布 Release）。
-- 本项目**不会**自动上传到对象存储或任何第三方分发渠道；需要二进制请按上一节在本地自行构建。
+本项目不使用 CI 自动构建，也**不会**上传到对象存储或任何第三方分发渠道；需要二进制请按上文在本地自行构建。
 
 ## 测试
 
@@ -168,7 +185,7 @@ npm run test:release-contents   # 发行白名单与 asar 内容检查
 平台要求与边界：
 
 - Linux 无头环境需要 `xvfb-run`（测试启动器会自动使用，并隔离 fontconfig 缓存以避免中文方框）。Windows / macOS 直接使用当前桌面会话。
-- Smoke/UI 音频测试需要 `ffmpeg` 生成合成音频（Windows CI 里由工作流安装）；独立桌面歌词测试直接生成静音 WAV，不依赖 `ffmpeg`。
+- Smoke/UI 音频测试需要 `ffmpeg` 生成合成音频；独立桌面歌词测试直接生成静音 WAV，不依赖 `ffmpeg`。
 - 以上命令都**不登录任何账号**、不读取 `.local/`。可选的真实账号复验单独走 `npm run test:login-live -- --login`，只在本人明确准备扫码时执行。
 
 ## 架构与安全边界
@@ -216,7 +233,7 @@ React 渲染进程（本地文件）
 
 ## 已知限制与非目标
 
-- Windows / macOS **尚无真机验收**：本 README 中的“已实现”不等于这两个平台可用。
+- Windows 尚无真机验收；macOS arm64 仅有图标修复、桌面歌词与本地开发相关证据，不能据此宣称整个平台全部能力已验收。
 - 华为音源的真实 Electron 全曲播放（标准与无损）仍待授权验证；协议层解码证据不能替代它。
 - 音乐会话是另一种凭据（到期字段提示约 7 天，未实测到期的完整周期）；标准 refresh 流程未打通，真正失效后需要重新扫码，本项目不会每小时强制登录。
 - 歌单编辑只提供已验证的“简介修改”，不提供改名/封面/曲目增删的假按钮。
@@ -230,14 +247,14 @@ React 渲染进程（本地文件）
 
 - **不接受**绕过付费/会员/地域/版权限制、音频解密、接口滥用、批量抓取，或引入其它音乐平台音源、账号代理、云端转发的改动。
 - 修复缺陷、改进可访问性与中文排版、补充测试、提升跨平台兼容性是受欢迎的方向。
-- 提交前请通过 `npm test`、`npm run typecheck`、`npm run build`；涉及界面或播放器的改动请附上真实运行截图或测试输出。
+- 开发环境和流程见 [开发指南](docs/DEVELOPMENT.md)。提交前运行 `npm run verify`，并按改动范围补选集成测试；涉及界面或播放器的改动提供对应的验证证据。
 - 不要提交 `.local/`、`research/`、真实账号数据、Token、Cookie 或抓包内容；测试请使用合成数据。
 - 涉及真实账号的写操作验证由维护者本人在明确授权下执行，不接受通过 PR 自动运行。
 
 ## 第三方组件与致谢
 
 - 运行时/框架：Electron、React、undici；界面图标使用 [Lucide](https://lucide.dev)（ISC）。应用与托盘图标由 `scripts/make-icon.mjs` 从 Lucide 的 `music` 字形生成，许可与版权声明见 [`build/icon.LICENSE.txt`](build/icon.LICENSE.txt)。
-- 本项目为独立实现，不包含第三方客户端代码；接口形态来自公开网络资源与本人账号的兼容性实验，记录见 [接口契约](docs/API_CONTRACT.md) 与 [验证记录](docs/authorized-feature-validation.md)。
+- 本 Fork 继承 [talongao/huawei-music-desktop](https://github.com/talongao/huawei-music-desktop) 的代码与研究成果，未另引入其他音乐客户端源码。接口兼容性研究记录见 [接口契约](docs/API_CONTRACT.md) 与 [验证记录](docs/authorized-feature-validation.md)。
 
 ## 许可
 
@@ -252,6 +269,7 @@ React 渲染进程（本地文件）
 
 | 文档 | 内容 |
 |---|---|
+| [开发指南](docs/DEVELOPMENT.md) | 开发命令、源码入口、检查与手动同步上游 |
 | [实现状态](docs/IMPLEMENTATION_STATUS.md) | M0–M6 进度、当前验证范围与阻塞项 |
 | [实现方案](docs/IMPLEMENTATION_PLAN.md) | 目标架构、页面行为、阶段验收标准 |
 | [接口契约](docs/API_CONTRACT.md) | 已验证的接口参数与常见陷阱 |

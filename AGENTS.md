@@ -1,10 +1,12 @@
-# 项目工作规则
+# 个人 Fork 工作规则
 
+- 本仓库为 Govin-L/huawei-music-desktop，fork 自 talongao/huawei-music-desktop，分叉基线为 3fd6731。以个人 fork 继续维护，上游改动按需手动同步；保留原许可、署名与修改声明。
 - 本项目是华为音乐独立第三方桌面客户端；不用其他平台音源，不依赖手机充当播放器。
 - 已有 Electron + React + TypeScript 客户端与 Linux Electron 自动化；实际验收以 `docs/IMPLEMENTATION_STATUS.md` 为准。当前以 Linux 完成共享 API/页面/播放器验证，不用 Windows/macOS 或 Wine 阻塞开发；未验平台不能宣称已验收。不要重新选 Tauri/Go。
-- 开工先读 `README.md`、`docs/IMPLEMENTATION_PLAN.md`、`docs/API_CONTRACT.md`、`docs/authorized-feature-validation.md`。
+- 开工先读 `README.md`、`docs/DEVELOPMENT.md` 和 `docs/IMPLEMENTATION_STATUS.md`；涉及协议再读 `docs/API_CONTRACT.md`、`docs/authorized-feature-validation.md`。原实现方案及历史文档保留作参考，不能覆盖用户后来确认的范围。
 - 交接任务书：`docs/IMPLEMENTER_PROMPT.md`。按 M0–M6 推进，先完成真实登录和 MP3/FLAC 播放，再铺 UI。
-- 启动：`npm ci && npm start`；检查：`npm test`、`typecheck`、`build`、`test:electron`、`test:electron-ui`、`test:electron-business`、`test:electron-favorites`。后两项含合成账号/965 首夹具，不能当私人账号证据。`probe:login` / `probe:music` 会请求外网但不登录个人账号。
+- 首次安装依赖用 `npm ci`。日常开发用 `npm run dev:mock`（离线）或 `npm run dev`（自行登录）；两者保存 `src/` 后重建并重启，使用独立临时开发目录。`npm run preview` 构建后打开离线预览，交由用户验收。普通启动用 `npm start`。
+- 本仓库不使用 CI，不添加自动构建、测试、发布 workflow。提交检查用 `npm run verify`（类型检查、Node 单测、构建、桌面歌词 Electron 回归），其他套件按改动选择；开发中间态不反复运行测试。业务/965 首测试及离线预览均为合成数据，不能当私人账号证据。`probe:login` / `probe:music` 会请求外网但不登录个人账号。
 - 现有 `src/*.mjs` 和 `test/` 是独立协议原型，可迁移复用；`scripts/` 为实验命令，不能全部塞进发行包。
 - `.local/` 包含真实账号凭据和音乐库数据：禁止打印/上传/提交/打包。`research/` 为本地研究材料，同样不得进入发行包。
 - 不主动调用保存的私人会话或重跑写测试；真实个人联网验证需当前用户授权。写操作只能用本次确定的临时对象并最终读回确认清理。

@@ -14,12 +14,20 @@ If not, see <https://www.gnu.org/licenses/>.
 
 SPDX-License-Identifier: AGPL-3.0-only
 
+本 Fork 修改声明
+----------------
+本仓库由 Govin-L 自 2026-10-22 起维护和修改，fork 自
+https://github.com/talongao/huawei-music-desktop
+分叉基线：3fd67319fa4b4a10de00d6da7d88e4e52ebd8327。
+修改包括 macOS 菜单栏图标、透明桌面歌词与样式设置、离线预览和本地开发基建。
+原有版权与 AGPL-3.0 许可继续保留；完整修改记录见 Git 历史。
+
 第三方归属与例外
 ----------------
 - 应用与托盘图标由 Lucide 图标集的 music 字形生成（ISC 许可），版权与许可声明见
   build/icon.LICENSE.txt。
 - 运行时依赖（Electron、React、undici 等）按其各自许可证分发，见各依赖包内声明。
-- 本项目不包含第三方客户端源码；接口形态来自公开网络资源与本人账号的兼容性实验，
+- 除注明的上游代码外，未另引入其他音乐客户端源码；接口形态来自公开兼容性研究，
   相关记录见 docs/API_CONTRACT.md 与 docs/authorized-feature-validation.md。
 - 代码许可不代表获得华为服务、接口、商标或音乐内容的任何许可；详见 README 的
   免责声明与使用边界。

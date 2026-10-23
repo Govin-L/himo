@@ -14,12 +14,15 @@
     "node": ">=22.15.0"
   },
   "scripts": {
-    "dev": "npm run start",
+    "dev": "node scripts/dev.mjs",
+    "dev:mock": "node scripts/dev.mjs --mock",
     "start": "npm run build && node scripts/start-desktop.mjs",
+    "preview": "npm run build && node scripts/preview-mock.mjs",
     "typecheck": "tsc --noEmit",
     "build": "npm run typecheck && electron-vite build",
+    "check": "npm run typecheck && npm test",
+    "verify": "npm run check && electron-vite build && node scripts/run-electron-tests.mjs lyrics",
     "test": "node --test test/*.test.mjs",
-    "test:unit": "vitest run",
     "test:electron": "npm run build && node scripts/run-electron-tests.mjs smoke",
     "test:electron-ui": "npm run build && node scripts/run-electron-tests.mjs ui",
     "test:desktop-lyrics": "npm run build && node scripts/run-electron-tests.mjs lyrics",
@@ -57,8 +60,7 @@
     "playwright-core": "1.64.0",
     "react": "19.3.0",
     "react-dom": "19.3.0",
-    "typescript": "7.0.2",
-    "vitest": "5.0.4"
+    "typescript": "7.0.2"
   },
   "build": {
     "appId": "org.hwmusicdesktop.unofficial.internal",
