@@ -24,7 +24,7 @@ try {
     const extraction = join(root, 'extracted');
     await mkdir(extraction);
     execFileSync(artifact, ['--appimage-extract'], { cwd: extraction, env, stdio: 'ignore' });
-    binary = join(extraction, 'squashfs-root', 'huawei-music-desktop');
+    binary = join(extraction, 'squashfs-root', 'himo');
   }
   const resources = process.platform === 'darwin' ? resolve(dirname(binary), '../Resources') : join(dirname(binary), 'resources');
   const archive = join(resources, 'app.asar');

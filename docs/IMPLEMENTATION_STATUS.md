@@ -2,6 +2,12 @@
 
 更新时间：2026-10-23。当前以 **Linux 真实 Electron 环境**完成共享 API、业务逻辑、页面和播放器验证；Windows/macOS 不阻塞开发，不使用 Wine 作为运行/验收依赖。不对外发布。
 
+## himo 仓库与项目品牌统一（2026-10-23）
+
+- verified（仓库改名与品牌配置）：个人仓库已改名为 `Govin-L/himo`，同步当前文档、克隆命令、项目主页与问题链接；新安装包以 `himo-` 开头，Linux 可执行文件和桌面入口统一为 `himo` / `himo.desktop`。
+- 保留内部 `package.json.name`、`build.appId`、现有数据目录和开发 profile，避免影响已有登录、设置和队列；保留上游名称、署名、许可和历史证据。本项目日常开发直接提交推送 `main`。
+- 本轮验证：实际 electron-builder 元数据生成覆盖 macOS arm64/x64、Linux AppImage 与 Windows NSIS 文件名及 Linux 桌面入口/WMClass；文档链接、依赖锁文件不变和数据身份不变检查通过。`npm run verify` 通过（类型检查、184 项 Node 单测、构建、隐藏窗口桌面歌词回归）。远端仓库固定 ID、默认分支、可见性和 fork 来源保持一致，个人 SSH `origin` 已更新；未生成本轮安装包，未做 Windows/Linux 运行验收、发布或安装。
+
 ## 鸿蒙风格底部导航（2026-10-23）
 
 - 提交门禁（macOS arm64）：`npm run verify` 通过，包括类型检查、184 项 Node 单测、构建和桌面歌词 Electron 回归。回归使用隔离合成数据，临时检查入口保持窗口隐藏、不抢焦点，未修改测试断言或生产默认交互；紧凑顶栏的四组几何/图标检查另已通过。未新增 CI 或执行发布、覆盖安装。

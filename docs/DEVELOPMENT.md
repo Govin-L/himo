@@ -5,8 +5,8 @@
 需要 Node.js 22.15+、npm 和可用的桌面会话。`.nvmrc` 选择 Node.js 22，使用 nvm 时可执行：
 
 ```sh
-git clone https://github.com/Govin-L/huawei-music-desktop.git
-cd huawei-music-desktop
+git clone https://github.com/Govin-L/himo.git
+cd himo
 nvm install
 nvm use
 npm ci
@@ -79,13 +79,16 @@ macOS 开发/预览直接运行 Electron，因此打包配置中的应用图标�
 
 不为迭代方便将 `src/`、`scripts/` 搬迁重排。应用显示名由 `src/shared/app-name.mjs` 管理，不通过更改 `package.json.name` 切换名称，以免改变现有数据目录。
 
+仓库地址为 `https://github.com/Govin-L/himo`，新安装包文件名以 `himo-` 开头，Linux 可执行文件和桌面入口分别为 `himo` 与 `himo.desktop`。内部包名、应用 ID 和上表的开发/预览目录为兼容已有数据保留原值；不需要迁移登录状态、设置或队列。
+
 ## 6. 检查与贡献
 
-建议先从最新个人远端基线创建任务分支：
+本个人项目日常开发直接在 `main` 提交推送，不默认创建功能分支或 PR。先在干净工作区核对远端并快进同步：
 
 ```sh
 git fetch origin
-git switch --no-track -c feature/your-change origin/main
+git switch main
+git merge --ff-only origin/main
 # 编辑代码
 npm run verify
 git diff --check

@@ -10,7 +10,7 @@
 
 ## 关于本 Fork
 
-本仓库 [Govin-L/huawei-music-desktop](https://github.com/Govin-L/huawei-music-desktop) fork 自 [talongao/huawei-music-desktop](https://github.com/talongao/huawei-music-desktop)，以提交 [`3fd6731`](https://github.com/talongao/huawei-music-desktop/commit/3fd67319fa4b4a10de00d6da7d88e4e52ebd8327) 为分叉基线。感谢上游作者完成客户端、协议研究和基础工程。
+本仓库 [Govin-L/himo](https://github.com/Govin-L/himo) fork 自 [talongao/huawei-music-desktop](https://github.com/talongao/huawei-music-desktop)，以提交 [`3fd6731`](https://github.com/talongao/huawei-music-desktop/commit/3fd67319fa4b4a10de00d6da7d88e4e52ebd8327) 为分叉基线。感谢上游作者完成客户端、协议研究和基础工程。
 
 本 Fork 自 2026-10-22 起独立维护，主要改动：
 
@@ -20,6 +20,8 @@
 - 移除所有 CI 工作流，检查与打包在本地显式执行。
 
 后续迭代以本 Fork 为准，上游改动按需手动同步，不以合并回上游为前提。保留原项目的版权、AGPL-3.0 许可和第三方归属，修改声明见 [NOTICE](NOTICE)。开发和同步步骤见 [开发指南](docs/DEVELOPMENT.md)。
+
+仓库、应用和新构建产物统一使用 `himo` 标识。内部 `package.json.name`、应用 ID 和已有数据路径保留原值，继续使用原有登录状态、设置与队列；上游项目名称仍用于来源与历史说明。
 
 ---
 
@@ -66,8 +68,8 @@
 需要 **Node.js 22.15+** 和一个可用的桌面环境（Linux 无头环境请用 `xvfb-run`）：
 
 ```sh
-git clone https://github.com/Govin-L/huawei-music-desktop.git
-cd huawei-music-desktop
+git clone https://github.com/Govin-L/himo.git
+cd himo
 npm ci
 npm start
 ```
@@ -147,7 +149,7 @@ npm run dist:linux
 - 校验实际产物（从 AppImage 内提取二进制并隔离启动，不读默认用户目录）：
 
 ```sh
-npm run test:packaged -- release/linux-x64/huawei-music-desktop-0.0.1-linux-x86_64-internal.AppImage
+npm run test:packaged -- release/linux-x64/himo-0.0.1-linux-x86_64-internal.AppImage
 ```
 
 ### 4. macOS：DMG

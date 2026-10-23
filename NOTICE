@@ -20,6 +20,7 @@ SPDX-License-Identifier: AGPL-3.0-only
 https://github.com/talongao/huawei-music-desktop
 分叉基线：3fd67319fa4b4a10de00d6da7d88e4e52ebd8327。
 修改包括 himo 名称与图标、macOS 菜单栏适配、透明桌面歌词与样式设置、离线预览和本地开发基建。
+2026-10-23 将本 Fork 仓库与新构建产物的品牌统一为 himo，仓库地址为 https://github.com/Govin-L/himo。
 2026-10-23 增加 macOS 一体化深色标题栏和原生 Liquid Glass 主窗口效果。
 底部播放条和 Tab 的局部原生视图由本项目使用公开 AppKit / Node-API 实现，沿用本项目许可。
 原有版权与 AGPL-3.0 许可继续保留；完整修改记录见 Git 历史。

@@ -1,6 +1,7 @@
 # 个人 Fork 工作规则
 
-- 本仓库为 Govin-L/huawei-music-desktop，fork 自 talongao/huawei-music-desktop，分叉基线为 3fd6731。以个人 fork 继续维护，上游改动按需手动同步；保留原许可、署名与修改声明。
+- 本仓库为 Govin-L/himo，fork 自 talongao/huawei-music-desktop，分叉基线为 3fd6731。以个人 fork 继续维护，上游改动按需手动同步；保留原许可、署名与修改声明。
+- 本项目日常开发直接在 main 提交推送，不默认创建功能分支或 PR；保持个人 GitHub 身份与工作账号隔离。
 - 本项目是华为音乐独立第三方桌面客户端；不用其他平台音源，不依赖手机充当播放器。
 - 已有 Electron + React + TypeScript 客户端与 Linux Electron 自动化；实际验收以 `docs/IMPLEMENTATION_STATUS.md` 为准。当前以 Linux 完成共享 API/页面/播放器验证，不用 Windows/macOS 或 Wine 阻塞开发；未验平台不能宣称已验收。不要重新选 Tauri/Go。
 - 开工先读 `README.md`、`docs/DEVELOPMENT.md` 和 `docs/IMPLEMENTATION_STATUS.md`；涉及协议再读 `docs/API_CONTRACT.md`、`docs/authorized-feature-validation.md`。原实现方案及历史文档保留作参考，不能覆盖用户后来确认的范围。

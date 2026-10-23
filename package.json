@@ -5,10 +5,18 @@
   "type": "module",
   "main": "out/main/index.js",
   "description": "himo · 非官方华为音乐桌面客户端",
+  "homepage": "https://github.com/Govin-L/himo",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Govin-L/himo.git"
+  },
+  "bugs": {
+    "url": "https://github.com/Govin-L/himo/issues"
+  },
   "license": "AGPL-3.0-only",
-  "desktopName": "huawei-music-desktop.desktop",
+  "desktopName": "himo.desktop",
   "author": {
-    "name": "Huawei Music Desktop (unofficial internal build)"
+    "name": "himo (unofficial study build)"
   },
   "engines": {
     "node": ">=22.15.0"
@@ -72,7 +80,7 @@
     ],
     "npmRebuild": false,
     "publish": null,
-    "artifactName": "${name}-${version}-${os}-${arch}-internal.${ext}",
+    "artifactName": "${productName}-${version}-${os}-${arch}-internal.${ext}",
     "directories": {
       "output": "release"
     },
@@ -101,7 +109,7 @@
         }
       ],
       "forceCodeSigning": false,
-      "artifactName": "${name}-${version}-${os}-${arch}-setup-internal.${ext}"
+      "artifactName": "${productName}-${version}-${os}-${arch}-setup-internal.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -127,9 +135,9 @@
         }
       ],
       "syncDesktopName": true,
-      "executableName": "huawei-music-desktop",
+      "executableName": "himo",
       "category": "AudioVideo;Audio;Music",
-      "synopsis": "Unofficial third-party Huawei Music client (study build)",
+      "synopsis": "himo · Unofficial third-party Huawei Music client (study build)",
       "desktop": {
         "entry": {
           "Name": "himo",
