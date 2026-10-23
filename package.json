@@ -4,7 +4,7 @@
   "private": true,
   "type": "module",
   "main": "out/main/index.js",
-  "description": "华为音乐第三方客户端（学习版）· 非官方，仅供学习研究",
+  "description": "himo · 非官方华为音乐桌面客户端",
   "license": "AGPL-3.0-only",
   "desktopName": "huawei-music-desktop.desktop",
   "author": {
@@ -64,7 +64,7 @@
   },
   "build": {
     "appId": "org.hwmusicdesktop.unofficial.internal",
-    "productName": "华为音乐第三方客户端（学习版）",
+    "productName": "himo",
     "asar": true,
     "npmRebuild": false,
     "publish": null,
@@ -127,7 +127,7 @@
       "synopsis": "Unofficial third-party Huawei Music client (study build)",
       "desktop": {
         "entry": {
-          "Name": "华为音乐第三方客户端（学习版）",
+          "Name": "himo",
           "Comment": "非官方第三方客户端，仅供学习研究，未获华为授权"
         }
       }

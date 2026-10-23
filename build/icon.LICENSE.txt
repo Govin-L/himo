@@ -1,4 +1,13 @@
-App icon artwork is derived from the Lucide icon set (icon "music").
+himo icon artwork
+-----------------
+Application and colored tray artwork: build/himo-icon-source.png, a custom image
+created for himo. The monochrome tray ribbon is defined in scripts/make-icon.mjs.
+These project assets are supplied under the repository's AGPL-3.0-only license.
+
+Retained upstream attribution
+----------------------------
+The original upstream app/tray icon was derived from Lucide (icon "music").
+Lucide is still used for interface icons. Its original notice is retained below.
 
 ISC License
 

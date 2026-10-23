@@ -774,7 +774,7 @@ export function App() {
   return <div className={`app-shell ${panelOpen ? 'has-panel' : ''}`}>
     <aside className="sidebar">
       <div className="brand">
-        <span className="brand-mark"><Headphones size={19} /></span>
+        <span className="brand-mark"><img src={new URL('../../build/icon.png', import.meta.url).href} alt="" /></span>
         <span>{APP_BRAND_LABEL}</span>
       </div>
       <div className="nav-label">音乐库</div>

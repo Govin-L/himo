@@ -1,4 +1,4 @@
-# 华为音乐第三方客户端（学习版）
+# himo
 
 > **非官方项目**：与华为及其关联公司不存在隶属、合作或代理关系，未获官方授权、认可或技术支持，仅供学习研究。代码以 AGPL-3.0 授权，但公开分发安装包或商业使用前，请自行完成服务条款、应用身份与商标方面的合规评估。完整说明见[免责声明与使用边界](#免责声明与使用边界)。
 
@@ -6,7 +6,7 @@
 
 它**不绕过任何付费、会员、地域或 DRM 限制**：能听什么完全取决于账号已有权益；也不提供下载、解密、转存或离线导出功能。
 
-**English**: An unofficial, study-only desktop client for Huawei Music, built with Electron + React + TypeScript. It signs in with your own Huawei account, reads your own library, and plays the original Huawei Music audio your account is already entitled to. Not affiliated with or authorized by Huawei. Licensed AGPL-3.0; review the disclaimer before redistributing binaries.
+**English**: himo is an unofficial, study-only desktop client for Huawei Music, built with Electron + React + TypeScript. It signs in with your own Huawei account, reads your own library, and plays the original Huawei Music audio your account is already entitled to. Not affiliated with or authorized by Huawei. Licensed AGPL-3.0; review the disclaimer before redistributing binaries.
 
 ## 关于本 Fork
 
@@ -14,7 +14,7 @@
 
 本 Fork 自 2026-10-22 起独立维护，主要改动：
 
-- 修复 macOS 菜单栏图标与 Retina 模板图。
+- 使用 himo 名称与定制应用图标，保留 macOS 单色菜单栏模板图与 Retina 适配。
 - 增加独立透明桌面歌词，支持播放同步、拖动、锁定穿透、位置记忆和配色、描边、不透明度、字体等设置。
 - 提供无需登录的合成曲库预览、自动重建与重启、本地检查命令和开发指南。
 - 移除所有 CI 工作流，检查与打包在本地显式执行。
@@ -253,7 +253,7 @@ React 渲染进程（本地文件）
 
 ## 第三方组件与致谢
 
-- 运行时/框架：Electron、React、undici；界面图标使用 [Lucide](https://lucide.dev)（ISC）。应用与托盘图标由 `scripts/make-icon.mjs` 从 Lucide 的 `music` 字形生成，许可与版权声明见 [`build/icon.LICENSE.txt`](build/icon.LICENSE.txt)。
+- 运行时/框架：Electron、React、undici；界面图标使用 [Lucide](https://lucide.dev)（ISC）。himo 应用图标源图为 `build/himo-icon-source.png`，`scripts/make-icon.mjs` 生成应用/托盘 PNG 与单色菜单栏标记；素材及保留的上游归属说明见 [`build/icon.LICENSE.txt`](build/icon.LICENSE.txt)。
 - 本 Fork 继承 [talongao/huawei-music-desktop](https://github.com/talongao/huawei-music-desktop) 的代码与研究成果，未另引入其他音乐客户端源码。接口兼容性研究记录见 [接口契约](docs/API_CONTRACT.md) 与 [验证记录](docs/authorized-feature-validation.md)。
 
 ## 许可
