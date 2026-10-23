@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { flushSync } from 'react-dom';
 import {
-  Heart, Headphones, History, ListMusic, LogIn, LogOut, Search, Settings as SettingsIcon,
+  Headphones, History, House, ListMusic, LogIn, LogOut, Search, Settings as SettingsIcon, UserRound,
 } from 'lucide-react';
 import { LyricsPanel, LyricsStage, PlayerBar, QueuePanel } from './components';
 import {
@@ -27,22 +28,13 @@ type View =
   | { name: 'artist'; artistId: string };
 
 const VIEW_TITLES: Record<View['name'], string> = {
-  favorites: '我的收藏', playlists: '我的歌单', playlist: '歌单详情', search: '搜索',
+  favorites: '首页', playlists: '我的歌单', playlist: '歌单详情', search: '搜索',
   history: '播放历史', settings: '设置', album: '专辑', artist: '歌手',
-};
-
-const VIEW_EYEBROWS: Record<View['name'], string> = {
-  favorites: 'Library', playlists: 'Collections', playlist: 'Collection', search: 'Search',
-  history: 'History', settings: 'Preferences', album: 'Album', artist: 'Artist',
-};
-
-const NAV_ICONS = {
-  favorites: Heart, playlists: ListMusic, search: Search, history: History, settings: SettingsIcon,
 };
 
 // Runtime tint map: the CSS keeps red as its default so the first paint is already correct.
 const ACCENTS: Record<Exclude<AccentName, 'custom'>, { accent: string; light: string; deep: string; soft: string; line: string; shadow: string }> = {
-  red: { accent: '#c8202e', light: '#e0364a', deep: '#a51724', soft: 'rgba(200, 32, 46, 0.09)', line: 'rgba(200, 32, 46, 0.28)', shadow: 'rgba(200, 32, 46, 0.28)' },
+  red: { accent: '#c8202e', light: '#ff5378', deep: '#a51724', soft: 'rgba(200, 32, 46, 0.09)', line: 'rgba(200, 32, 46, 0.28)', shadow: 'rgba(200, 32, 46, 0.28)' },
   blue: { accent: '#2563eb', light: '#3b82f6', deep: '#1d4ed8', soft: 'rgba(37, 99, 235, 0.10)', line: 'rgba(37, 99, 235, 0.30)', shadow: 'rgba(37, 99, 235, 0.26)' },
   green: { accent: '#15803d', light: '#22a05a', deep: '#166534', soft: 'rgba(21, 128, 61, 0.10)', line: 'rgba(21, 128, 61, 0.28)', shadow: 'rgba(21, 128, 61, 0.24)' },
   amber: { accent: '#b45309', light: '#d97706', deep: '#92400e', soft: 'rgba(180, 83, 9, 0.11)', line: 'rgba(180, 83, 9, 0.30)', shadow: 'rgba(180, 83, 9, 0.24)' },
@@ -74,6 +66,13 @@ function applyAppearance(appearance: AppearanceSettings | undefined) {
     ? fontStackFor(appearance.customFont, FONT_STACKS.sans)
     : FONT_STACKS[appearance.fontFamily] ?? FONT_STACKS.sans);
 }
+
+// Phone-style scroll chrome (px): fold after a deliberate scroll down, restore on a small pull back.
+const CONTROLS_TOP_ZONE = 24;
+const CONTROLS_FOLD_TRAVEL = 24;
+const CONTROLS_RESTORE_TRAVEL = 10;
+// Folding frees the tab row; shorter pages would clamp back to the top and flicker.
+const CONTROLS_MIN_RANGE = 160;
 
 const HISTORY_KEY = 'local-play-history';
 const HISTORY_LIMIT = 200;
@@ -117,6 +116,11 @@ export function App() {
   const [desktopLyricsLocked, setDesktopLyricsLocked] = useState(false);
   const [lyricsLoading, setLyricsLoading] = useState(false);
   const [stageOpen, setStageOpen] = useState(false);
+  const stageTransition = useRef<ViewTransition | null>(null);
+  const mainContent = useRef<HTMLElement>(null);
+  const dock = useRef<HTMLDivElement>(null);
+  const [controlsCollapsed, setControlsCollapsed] = useState(false);
+  const controlsScroll = useRef({ collapsed: false, last: 0, travel: 0 });
   const [lyricOffset, setLyricOffset] = useState(0);
   const [lyricRevision, setLyricRevision] = useState(0);
   const lyricCache = useRef(new Map<string, LyricsDoc | null>());
@@ -340,7 +344,10 @@ export function App() {
     const unsubscribe = window.desktop.desktopLyrics.onVisibility(setDesktopLyricsVisible);
     const unsubscribePreferences = window.desktop.desktopLyrics.onPreferences(next => setDesktopLyricsLocked(next.locked));
     const unsubscribeSettings = window.desktop.desktopLyrics.onShowSettings(() => {
-      setView({ name: 'settings', tab: 'desktopLyrics', request: Date.now() });
+      transitionStage('closing', () => {
+        setStageOpen(false);
+        setView({ name: 'settings', tab: 'desktopLyrics', request: Date.now() });
+      });
     });
     void window.desktop.desktopLyrics.getVisible().then(setDesktopLyricsVisible);
     void window.desktop.desktopLyrics.getPreferences().then(next => setDesktopLyricsLocked(next.locked));
@@ -742,13 +749,102 @@ export function App() {
     localHistory, favoriteChange,
   };
 
-  const navItems: { key: keyof typeof NAV_ICONS; label: string }[] = [
-    { key: 'favorites', label: '我的收藏' },
-    { key: 'playlists', label: '我的歌单' },
-    { key: 'search', label: '搜索' },
-    { key: 'history', label: '播放历史' },
-    { key: 'settings', label: '设置' },
-  ];
+  function setControls(collapsed: boolean) {
+    const state = controlsScroll.current;
+    if (state.collapsed === collapsed) return;
+    state.collapsed = collapsed;
+    state.travel = 0;
+    setControlsCollapsed(collapsed);
+  }
+
+  // Scrolling the page down folds the dock and the header search; pulling back or reaching the top
+  // restores them. The page's own resize clamps scrollTop at the bottom, which is not a user scroll.
+  useEffect(() => {
+    const main = mainContent.current;
+    if (!main) return;
+    const onScroll = () => {
+      const state = controlsScroll.current;
+      const top = main.scrollTop;
+      const delta = top - state.last;
+      state.last = top;
+      if (top <= CONTROLS_TOP_ZONE) { setControls(false); return; }
+      const range = main.scrollHeight - main.clientHeight;
+      if (delta < 0 && top >= range - 1) return;
+      state.travel = Math.sign(delta) === Math.sign(state.travel) ? state.travel + delta : delta;
+      if (state.travel > CONTROLS_FOLD_TRAVEL && range > CONTROLS_MIN_RANGE) setControls(true);
+      else if (state.travel < -CONTROLS_RESTORE_TRAVEL) setControls(false);
+    };
+    main.addEventListener('scroll', onScroll, { passive: true });
+    return () => main.removeEventListener('scroll', onScroll);
+  }, []);
+
+  // The folded tab bubble matches the player's real height, which follows the font scale.
+  useEffect(() => {
+    const container = dock.current;
+    const player = container?.querySelector<HTMLElement>('.player');
+    if (!container || !player) return;
+    const observer = new ResizeObserver(() => {
+      const height = `${player.offsetHeight}px`;
+      if (container.style.getPropertyValue('--player-h') !== height) container.style.setProperty('--player-h', height);
+    });
+    observer.observe(player);
+    return () => observer.disconnect();
+  }, []);
+
+  // Every navigation and the lyrics page start expanded; child pages have restored their scroll by now.
+  useEffect(() => {
+    controlsScroll.current.last = mainContent.current?.scrollTop ?? 0;
+    setControls(false);
+  }, [view, stageOpen]);
+
+  // Only tabs backed by working features; 音乐厅、现在就听、café听 return once their APIs are verified.
+  const navItems = [
+    { key: 'home', label: '首页', Icon: House },
+    { key: 'mine', label: '我的', Icon: UserRound },
+  ] as const;
+  const personalRoot = view.name === 'playlists' || view.name === 'history' || view.name === 'settings';
+  const activeNav = personalRoot || view.name === 'playlist' ? 'mine' : 'home';
+
+  function transitionStage(direction: 'opening' | 'closing', update: () => void) {
+    stageTransition.current?.skipTransition();
+    stageTransition.current = null;
+    if (!document.startViewTransition || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      update();
+      return;
+    }
+    document.documentElement.dataset.lyricsTransition = direction;
+    const transition = document.startViewTransition(() => {
+      // A newer navigation can supersede this callback before the browser captures a frame.
+      if (stageTransition.current === transition) flushSync(update);
+    });
+    stageTransition.current = transition;
+    // Hidden windows can skip a transition while still applying its update.
+    void transition.ready.catch(() => undefined);
+    void transition.finished.catch(error => console.error('歌词页面切换失败', error)).finally(() => {
+      if (stageTransition.current === transition) {
+        stageTransition.current = null;
+        delete document.documentElement.dataset.lyricsTransition;
+      }
+    });
+  }
+
+  function navigate(name: 'favorites' | 'playlists' | 'search' | 'history' | 'settings') {
+    const update = () => { setStageOpen(false); setView({ name } as View); };
+    if (stageOpen || stageTransition.current) transitionStage('closing', update);
+    else update();
+  }
+
+  function openStage() {
+    const update = () => { setLyricsOpen(false); setQueueOpen(false); setStageOpen(true); };
+    if (stageOpen && !stageTransition.current) update();
+    else transitionStage('opening', update);
+  }
+
+  const personalItems = [
+    { name: 'playlists', label: '歌单', Icon: ListMusic },
+    { name: 'history', label: '播放历史', Icon: History },
+    { name: 'settings', label: '设置', Icon: SettingsIcon },
+  ] as const;
 
   function renderPage() {
     switch (view.name) {
@@ -763,7 +859,7 @@ export function App() {
     }
   }
 
-  const panelOpen = lyricsOpen || queueOpen;
+  const panelOpen = !stageOpen && (lyricsOpen || queueOpen);
   const viewHint =
     view.name === 'favorites' ? '收藏的全部歌曲，向下滚动自动加载'
       : view.name === 'playlists' ? '自建、收藏与榜单'
@@ -771,43 +867,35 @@ export function App() {
           : view.name === 'history' ? '本机记录与华为服务端记录'
             : view.name === 'settings' ? '播放、界面与隐私偏好'
               : '';
-  return <div className={`app-shell ${panelOpen ? 'has-panel' : ''}`}>
-    <aside className="sidebar">
+  return <div className={`app-shell ${panelOpen ? 'has-panel' : ''} ${stageOpen ? 'has-stage' : ''} ${controlsCollapsed ? 'controls-collapsed' : ''}`}>
+    <header className="app-header">
       <div className="brand">
         <span className="brand-mark"><img src={new URL('../../build/icon.png', import.meta.url).href} alt="" /></span>
         <span>{APP_BRAND_LABEL}</span>
       </div>
-      <div className="nav-label">音乐库</div>
-      {navItems.map(item => {
-        const Icon = NAV_ICONS[item.key];
-        return <button key={item.key}
-          className={`nav-item ${view.name === item.key || (item.key === 'playlists' && view.name === 'playlist') ? 'active' : ''}`}
-          title={item.label}
-          onClick={() => setView({ name: item.key } as View)}>
-          <Icon size={16} /><span>{item.label}</span>
-        </button>;
-      })}
-      <div className="sidebar-foot">
-        <div className={`status-dot ${status?.authenticated ? '' : 'off'}`} />
-        <span>{status?.authenticated ? '音乐会话已连接' : '未登录'}</span>
+      <button className="global-search" onClick={() => navigate('search')} aria-label="打开搜索">
+        <Search size={17} /><span>搜索歌曲、艺人或专辑</span>
+      </button>
+      <div className="account-actions">
+        <span className="account-status"><i className={`status-dot ${status?.authenticated ? '' : 'off'}`} />{status?.authenticated ? '已连接' : '未登录'}</span>
+        {status?.authenticated
+          ? <><button className="ghost" onClick={login} disabled={busy}><LogIn size={14} />重新登录</button>
+            <button className="ghost" onClick={logout} disabled={busy}><LogOut size={14} />退出</button></>
+          : <button className="primary" onClick={login} disabled={busy}><LogIn size={14} />扫码登录</button>}
       </div>
-    </aside>
-    <main className="main-content">
+    </header>
+    <main ref={mainContent} className="main-content" hidden={stageOpen}>
       <header className="topbar">
         <div>
-          <p className="eyebrow">{VIEW_EYEBROWS[view.name]}</p>
           <h1>{VIEW_TITLES[view.name]}</h1>
           <p className="page-sub">{status?.authenticated || view.name === 'settings' ? viewHint : '登录后即可浏览你的音乐库'}</p>
         </div>
-        <div className="actions">
-          {status?.authenticated
-            ? <>
-              <button className="ghost" onClick={login} disabled={busy}><LogIn size={14} />重新登录</button>
-              <button className="ghost danger" onClick={logout} disabled={busy}><LogOut size={14} />退出</button>
-            </>
-            : <button className="primary" onClick={login} disabled={busy}><LogIn size={14} />扫码登录</button>}
-        </div>
       </header>
+      {personalRoot && <nav className="personal-nav" aria-label="我的音乐与设置">
+        {personalItems.map(({ name, label, Icon }) => <button key={name}
+          className={view.name === name ? 'active' : ''} aria-current={view.name === name ? 'page' : undefined}
+          onClick={() => navigate(name)}><Icon size={15} />{label}</button>)}
+      </nav>}
       <div className="notice" role="status" aria-live="polite">{message}{status?.notice && <span> · {status.notice}</span>}</div>
       {!status?.authenticated && view.name !== 'settings'
         ? <section className="empty-state">
@@ -817,19 +905,21 @@ export function App() {
           <button className="primary large" onClick={login} disabled={busy}>打开官方登录</button>
         </section>
         : renderPage()}
-      {status?.authenticated && <FavoritesPage key={accountVersion} ctx={ctx} active={view.name === 'favorites'} />}
+      {status?.authenticated && <FavoritesPage key={accountVersion} ctx={ctx} active={view.name === 'favorites' && !stageOpen}
+        currentTrack={currentTrack} onOpenPlaylists={() => navigate('playlists')}
+        onContinue={() => { if (!playing) togglePlayback(); openStage(); }} />}
     </main>
     {loginOpen && <div className="login-bar" role="status">
       <span>正在官方页面完成扫码授权，完成后自动返回。</span>
       <button className="ghost" onClick={() => void cancelLogin()}>取消登录</button>
     </div>}
-    {lyricsOpen && <LyricsPanel
+    {!stageOpen && lyricsOpen && <LyricsPanel
       doc={lyrics}
       loading={lyricsLoading}
       positionSeconds={position}
       offsetSeconds={lyricOffset}
       onSeekTo={seekToLyric}
-      onOpenStage={() => setStageOpen(true)}
+      onOpenStage={openStage}
       onImport={() => void importLocalLyrics()}
       onRemoveLocal={() => void removeLocalLyrics()}
       onClose={() => setLyricsOpen(false)}
@@ -841,59 +931,72 @@ export function App() {
       loading={lyricsLoading}
       positionSeconds={position}
       offsetSeconds={lyricOffset}
-      playing={playing}
-      duration={duration}
-      disabled={!queue.length}
       onSeekTo={seekToLyric}
-      onSeekSeconds={seekAudio}
-      onToggle={togglePlayback}
-      onPrevious={goPrevious}
-      onNext={goNext}
       onOffset={changeLyricOffset}
       onImport={() => void importLocalLyrics()}
       onRemoveLocal={() => void removeLocalLyrics()}
-      onClose={() => setStageOpen(false)}
+      onClose={() => transitionStage('closing', () => setStageOpen(false))}
     />}
-    <PlayerBar
-      track={currentTrack}
-      playing={playing}
-      buffering={buffering}
-      position={position}
-      duration={duration}
-      volume={volume}
-      quality={quality}
-      actualQuality={actualQuality}
-      repeatMode={repeatMode}
-      shuffle={shuffle}
-      disabled={!queue.length}
-      onToggle={togglePlayback}
-      onPrevious={goPrevious}
-      onNext={goNext}
-      onSeekPreview={previewSeek}
-      onSeekCommit={commitSeek}
-      onVolume={changeVolume}
-      onToggleMute={toggleMute}
-      onToggleQuality={toggleQuality}
-      onToggleRepeat={toggleRepeat}
-      onToggleShuffle={toggleShuffle}
-      onToggleLyrics={() => setLyricsOpen(value => { if (!value) setQueueOpen(false); return !value; })}
-      onToggleQueue={() => setQueueOpen(value => { if (!value) setLyricsOpen(false); return !value; })}
-      onOpenStage={() => setStageOpen(true)}
-      lyricsOpen={lyricsOpen}
-      desktopLyricsOpen={desktopLyricsVisible}
-      desktopLyricsLocked={desktopLyricsLocked}
-      onToggleDesktopLyricsLock={() => {
-        void window.desktop.desktopLyrics.updatePreferences({ locked: !desktopLyricsLocked })
-          .catch(() => setMessage('无法更改歌词锁定状态，请重试。'));
-      }}
-      onToggleDesktopLyrics={() => {
-        void window.desktop.desktopLyrics.setVisible(!desktopLyricsVisible)
-          .then(setDesktopLyricsVisible).catch(() => setMessage('无法切换桌面歌词，请重试。'));
-      }}
-      queueOpen={queueOpen}
-      queueCount={queue.length}
-      favorite={currentTrack ? favoriteOf(currentTrack.id) : undefined}
-      onToggleFavorite={() => { if (currentTrack) void toggleFavorite(currentTrack, !favoriteOf(currentTrack.id)); }}
-    />
+    <div ref={dock} className="dock">
+      <PlayerBar
+        track={currentTrack}
+        playing={playing}
+        buffering={buffering}
+        position={position}
+        duration={duration}
+        volume={volume}
+        quality={quality}
+        actualQuality={actualQuality}
+        repeatMode={repeatMode}
+        shuffle={shuffle}
+        disabled={!queue.length}
+        onToggle={togglePlayback}
+        onPrevious={goPrevious}
+        onNext={goNext}
+        onSeekPreview={previewSeek}
+        onSeekCommit={commitSeek}
+        onVolume={changeVolume}
+        onToggleMute={toggleMute}
+        onToggleQuality={toggleQuality}
+        onToggleRepeat={toggleRepeat}
+        onToggleShuffle={toggleShuffle}
+        onToggleLyrics={() => {
+          if (stageOpen) {
+            transitionStage('closing', () => { setStageOpen(false); setQueueOpen(false); setLyricsOpen(true); });
+            return;
+          }
+          setLyricsOpen(value => { if (!value) setQueueOpen(false); return !value; });
+        }}
+        onToggleQueue={() => setQueueOpen(value => { if (!value) setLyricsOpen(false); return !value; })}
+        onOpenStage={openStage}
+        lyricsOpen={lyricsOpen}
+        desktopLyricsOpen={desktopLyricsVisible}
+        desktopLyricsLocked={desktopLyricsLocked}
+        onToggleDesktopLyricsLock={() => {
+          void window.desktop.desktopLyrics.updatePreferences({ locked: !desktopLyricsLocked })
+            .catch(() => setMessage('无法更改歌词锁定状态，请重试。'));
+        }}
+        onToggleDesktopLyrics={() => {
+          void window.desktop.desktopLyrics.setVisible(!desktopLyricsVisible)
+            .then(setDesktopLyricsVisible).catch(() => setMessage('无法切换桌面歌词，请重试。'));
+        }}
+        queueOpen={queueOpen}
+        queueCount={queue.length}
+        favorite={currentTrack ? favoriteOf(currentTrack.id) : undefined}
+        onToggleFavorite={() => { if (currentTrack) void toggleFavorite(currentTrack, !favoriteOf(currentTrack.id)); }}
+      />
+      <nav className="bottom-nav" aria-label="主导航">
+        {navItems.map(({ key, label, Icon }) => <button key={key}
+          className={`bottom-nav-item ${key === activeNav ? 'active' : ''}`}
+          aria-current={key === activeNav ? 'page' : undefined} title={controlsCollapsed ? '展开导航' : label}
+          inert={controlsCollapsed && key !== activeNav}
+          onClick={() => {
+            // The folded bubble shows only the current tab; pressing it unfolds the bar.
+            if (controlsCollapsed) setControls(false);
+            else if (key === 'home') navigate('favorites');
+            else navigate(personalRoot ? view.name as 'playlists' | 'history' | 'settings' : 'playlists');
+          }}><Icon size={23} /><span>{label}</span></button>)}
+      </nav>
+    </div>
   </div>;
 }

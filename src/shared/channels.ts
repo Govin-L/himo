@@ -30,6 +30,7 @@ export const channels = {
   queueSave: 'queue:save',
   windowMinimize: 'window:minimize',
   windowSetCloseBehavior: 'window:set-close-behavior',
+  windowSyncGlassControls: 'window:sync-glass-controls',
   appQuit: 'app:quit',
   appNotice: 'app:notice',
   playerCommand: 'player:command',

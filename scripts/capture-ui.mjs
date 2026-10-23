@@ -156,19 +156,20 @@ try {
   await page.getByRole('button', { name: /^夜航 01/ }).waitFor({ timeout: 15000 });
   await shot('02-favorites.png');
 
-  await page.getByRole('button', { name: '我的歌单', exact: true }).click();
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: /夜里听的歌/ }).waitFor({ timeout: 10000 });
   await shot('03-playlists.png');
   await page.getByRole('button', { name: /夜里听的歌/ }).click();
   await page.waitForTimeout(500);
   await shot('04-playlist-detail.png');
 
-  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await page.getByRole('button', { name: '打开搜索' }).click();
   await page.getByRole('textbox', { name: '搜索歌曲' }).fill('夜');
   await page.locator('.search-bar button[type=submit]').click();
   await page.getByRole('button', { name: /^夜航 01/ }).waitFor({ timeout: 10000 });
   await shot('05-search.png');
 
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: '播放历史' }).click();
   await page.getByRole('button', { name: '华为历史（只读）' }).click();
   await page.locator('.library:not(.favorites-library) .track-name').first().waitFor({ timeout: 10000 });
@@ -220,7 +221,7 @@ try {
   await page.locator('.settings-nav-item', { hasText: '关于' }).click();
   await shot('13-settings-about.png');
 
-  await page.getByRole('button', { name: '我的收藏' }).click();
+  await page.getByRole('button', { name: '首页', exact: true }).click();
   await page.locator('.favorites-library .track-row').first().hover();
   await page.getByRole('button', { name: '播放 夜航 01' }).click();
   await page.getByRole('button', { name: '暂停' }).waitFor({ timeout: 15000 });
@@ -236,6 +237,7 @@ try {
   await shot('17-queue.png');
   await page.getByRole('button', { name: '关闭' }).click();
 
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: '设置' }).click();
   await page.locator('.settings-nav-item', { hasText: '外观' }).click();
   await page.getByRole('button', { name: '主题色 靛蓝' }).click();
@@ -244,14 +246,15 @@ try {
   await page.getByRole('slider', { name: '面板透明度' }).focus();
   for (let i = 0; i < 5; i += 1) await page.getByRole('slider', { name: '面板透明度' }).press('ArrowLeft');
   await shot('18-settings-appearance-blue.png');
-  await page.getByRole('button', { name: '我的收藏' }).click();
+  await page.getByRole('button', { name: '首页', exact: true }).click();
   await shot('19-favorites-blue.png');
 
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: '设置' }).click();
   await page.locator('.settings-nav-item', { hasText: '外观' }).click();
   await page.getByRole('button', { name: '恢复默认外观' }).click();
   await instance.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(960, 640));
-  await page.getByRole('button', { name: '我的收藏' }).click();
+  await page.getByRole('button', { name: '首页', exact: true }).click();
   await shot('20-favorites-960.png');
 
   console.log('screenshots written to', out);

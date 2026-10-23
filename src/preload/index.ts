@@ -52,6 +52,7 @@ const api: DesktopApi = {
   window: {
     minimize: () => ipcRenderer.invoke(channels.windowMinimize),
     setCloseBehavior: input => ipcRenderer.invoke(channels.windowSetCloseBehavior, input),
+    syncGlassControls: layout => ipcRenderer.invoke(channels.windowSyncGlassControls, layout),
   },
   app: { quit: () => ipcRenderer.invoke(channels.appQuit) },
   desktopLyrics: {

@@ -245,7 +245,7 @@ try {
   await page.getByRole('button', { name: '顺序播放' }).waitFor({ timeout: 3000 });
 
   // Playlists page and owned-playlist detail with a destructive confirmation.
-  await page.getByRole('button', { name: '我的歌单' }).click();
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: /自建歌单/ }).waitFor({ timeout: 10_000 });
   await page.getByRole('button', { name: /自建歌单/ }).click();
   const description = page.getByRole('textbox', { name: '歌单简介' });
@@ -268,7 +268,7 @@ try {
   assert.deepEqual(await app.evaluate(() => globalThis.__deletedPlaylists), ['owned-1']);
 
   // Search page issues exactly one query and renders the result.
-  await page.getByRole('button', { name: '搜索', exact: true }).click();
+  await page.getByRole('button', { name: '打开搜索' }).click();
   await page.getByRole('textbox', { name: '搜索歌曲' }).fill('fixture');
   await page.locator('.search-bar button[type=submit]').click();
   await page.getByRole('button', { name: /^Smoke FLAC/ }).first().waitFor({ timeout: 10_000 });
@@ -276,6 +276,7 @@ try {
   assert.deepEqual(queries, ['fixture']);
 
   // History: local tab records the track that just played, remote tab is read-only.
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: '播放历史' }).click();
   await page.getByText('Smoke MP3').first().waitFor({ timeout: 5000 });
   await page.getByRole('button', { name: '华为历史（只读）' }).click();
@@ -355,12 +356,16 @@ try {
   await page.waitForTimeout(200);
   const geometry = await page.evaluate(() => {
     const player = document.querySelector('.player').getBoundingClientRect();
-    const sidebar = document.querySelector('.sidebar').getBoundingClientRect();
+    const navigation = document.querySelector('.bottom-nav').getBoundingClientRect();
+    const content = document.querySelector('.main-content').getBoundingClientRect();
     return { playerVisible: player.bottom <= innerHeight + 1 && player.top >= 0,
-      sidebarFits: sidebar.bottom <= innerHeight + 1,
+      navigationVisible: navigation.bottom <= innerHeight + 1 && navigation.top >= 0,
+      navigationBelowPlayer: navigation.top >= player.bottom - 1,
+      contentAbovePlayer: content.bottom <= player.top + 1,
       noBodyScroll: document.documentElement.scrollWidth <= innerWidth && document.documentElement.scrollHeight <= innerHeight };
   });
-  assert.deepEqual(geometry, { playerVisible: true, sidebarFits: true, noBodyScroll: true });
+  assert.deepEqual(geometry, { playerVisible: true, navigationVisible: true,
+    navigationBelowPlayer: true, contentAbovePlayer: true, noBodyScroll: true });
   const screenshots = join(process.cwd(), 'release', 'qa');
   await mkdir(screenshots, { recursive: true });
   await page.screenshot({ path: join(screenshots, 'linux-settings-960.png') });
@@ -368,7 +373,7 @@ try {
   await page.screenshot({ path: join(screenshots, 'linux-queue-960.png') });
   await page.getByRole('button', { name: '关闭' }).click();
   await app.evaluate(({ BrowserWindow }) => BrowserWindow.getAllWindows()[0].setContentSize(1180, 760));
-  await page.getByRole('button', { name: '我的收藏' }).click();
+  await page.getByRole('button', { name: '首页', exact: true }).click();
   await page.getByRole('button', { name: /^Smoke MP3/ }).waitFor();
   await page.screenshot({ path: join(screenshots, 'linux-library-1180.png') });
 

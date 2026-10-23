@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type CSSProperties, type ReactNode } from 'react';
 import {
-  ChevronUp, Heart, Headphones, ListMusic, Minimize2, Music2, Pause, PictureInPicture2, Play, Lock, Unlock, SkipBack, SkipForward, Volume2, VolumeX, X,
+  ChevronUp, Heart, Headphones, ListMusic, Minimize2, Music2, Pause, PictureInPicture2, Play, Lock, Unlock, Repeat, Repeat1, Shuffle, SkipBack, SkipForward, Volume2, VolumeX, X,
 } from 'lucide-react';
 import { activeLyricIndex } from '../lyrics.mjs';
 import type { LyricsDoc, Playlist, Track } from '../shared/types';
@@ -176,7 +176,7 @@ export function PlayerBar(props: PlayerBarProps) {
       <div className="now-playing-text">
         <strong>{track?.title ?? '尚未选择歌曲'}</strong>
         <span>
-          {buffering ? '正在缓冲…' : playing ? '正在播放' : track ? track.artists.map(artist => artist.name).join(' / ') || '未知艺人' : '选择一首歌开始播放'}
+          {buffering ? '正在缓冲…' : track ? track.artists.map(artist => artist.name).join(' / ') || '未知艺人' : '选择一首歌开始播放'}
           {props.actualQuality !== 'unknown' ? ` · ${props.actualQuality === 'lossless' ? '无损' : '标准'}` : ''}
         </span>
       </div>
@@ -188,7 +188,7 @@ export function PlayerBar(props: PlayerBarProps) {
     <div className="player-controls">
       <div className="buttons">
         <button aria-label="随机播放" aria-pressed={props.shuffle} className={props.shuffle ? 'active' : ''} onClick={props.onToggleShuffle} disabled={props.disabled} title="随机播放">
-          <ListMusic size={15} />
+          <Shuffle size={15} />
         </button>
         <button aria-label="上一首" onClick={props.onPrevious} disabled={props.disabled}><SkipBack size={16} fill="currentColor" /></button>
         <button className="play-button" aria-label={playing ? '暂停' : '播放'} onClick={props.onToggle} disabled={props.disabled}>
@@ -196,7 +196,7 @@ export function PlayerBar(props: PlayerBarProps) {
         </button>
         <button aria-label="下一首" onClick={props.onNext} disabled={props.disabled}><SkipForward size={16} fill="currentColor" /></button>
         <button aria-label={repeatLabel} aria-pressed={props.repeatMode !== 'off'} className={props.repeatMode !== 'off' ? 'active' : ''} onClick={props.onToggleRepeat} disabled={props.disabled}>
-          {props.repeatMode === 'one' ? '①' : '↻'}
+          {props.repeatMode === 'one' ? <Repeat1 size={16} /> : <Repeat size={16} />}
         </button>
       </div>
       <div className="progress">
@@ -214,7 +214,7 @@ export function PlayerBar(props: PlayerBarProps) {
         <ChevronUp size={13} />词
       </button>
       <button className="pill-button" aria-label="播放队列" aria-pressed={props.queueOpen} onClick={props.onToggleQueue} disabled={!props.queueCount}>
-        队列 {props.queueCount}
+        <ListMusic size={17} /><span className="queue-count">{props.queueCount}</span>
       </button>
       <button className="icon-button" aria-label="桌面歌词" title="桌面歌词"
         aria-pressed={props.desktopLyricsOpen} onClick={props.onToggleDesktopLyrics}>
@@ -300,19 +300,12 @@ export function LyricsPanel({ doc, loading, positionSeconds, offsetSeconds, onSe
 }
 
 export function LyricsStage({
-  track, doc, loading, positionSeconds, offsetSeconds, playing, duration, disabled,
-  onSeekTo, onSeekSeconds, onToggle, onPrevious, onNext, onOffset, onImport, onRemoveLocal, onClose,
+  track, doc, loading, positionSeconds, offsetSeconds,
+  onSeekTo, onOffset, onImport, onRemoveLocal, onClose,
 }: LyricsViewProps & {
   track?: Track;
   onImport(): void;
   onRemoveLocal(): void;
-  playing: boolean;
-  duration: number;
-  disabled: boolean;
-  onSeekSeconds(seconds: number): void;
-  onToggle(): void;
-  onPrevious(): void;
-  onNext(): void;
   onOffset(deltaSeconds: number): void;
   onClose(): void;
 }) {
@@ -320,7 +313,6 @@ export function LyricsStage({
   const container = useRef<HTMLDivElement | null>(null);
   const lines = doc?.lines ?? [];
   const activeIndex = useActiveLyric(doc, positionSeconds, offsetSeconds);
-  const seekMax = duration || 1;
   useEffect(() => { setFollowing(true); }, [doc, track?.id]);
   useEffect(() => {
     if (following && activeIndex >= 0) container.current?.querySelector('.stage-line.active')?.scrollIntoView({ block: 'center', behavior: 'smooth' });
@@ -373,21 +365,6 @@ export function LyricsStage({
       </div>
     </div>
     <footer className="stage-foot">
-      <div className="stage-transport">
-        <button aria-label="上一首" onClick={onPrevious} disabled={disabled}><SkipBack size={17} fill="currentColor" /></button>
-        <button className="stage-play" aria-label={playing ? '暂停' : '播放'} onClick={onToggle} disabled={disabled}>
-          {playing ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-        </button>
-        <button aria-label="下一首" onClick={onNext} disabled={disabled}><SkipForward size={17} fill="currentColor" /></button>
-      </div>
-      <div className="stage-progress">
-        <span>{formatDuration(positionSeconds)}</span>
-        <input aria-label="播放进度" type="range" min="0" max={seekMax} step="0.1" value={Math.min(positionSeconds, seekMax)}
-          style={percentStyle(positionSeconds, seekMax)}
-          disabled={!duration}
-          onChange={event => onSeekSeconds(Number(event.target.value))} />
-        <span>{formatDuration(duration)}</span>
-      </div>
       <div className="stage-tools">
         <button className={`stage-tool ${following ? 'on' : ''}`} aria-pressed={following} onClick={() => setFollowing(value => !value)}>
           <Minimize2 size={13} />{following ? '跟随中' : '已暂停'}

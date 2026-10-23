@@ -1,5 +1,6 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
-import { TrackTable } from './components';
+import { Disc3, Heart, ListMusic, Play } from 'lucide-react';
+import { Cover, TrackTable } from './components';
 import { mergeFavoritesPage } from './favorites-pagination.mjs';
 import type { LibraryContext } from './pages';
 import type { Track } from '../shared/types';
@@ -7,7 +8,13 @@ import type { Track } from '../shared/types';
 const PAGE = 50;
 
 // Kept mounted for the current account: navigation must not reset pagination or scroll position.
-export function FavoritesPage({ ctx, active }: { ctx: LibraryContext; active: boolean }) {
+export function FavoritesPage({ ctx, active, currentTrack, onOpenPlaylists, onContinue }: {
+  ctx: LibraryContext;
+  active: boolean;
+  currentTrack?: Track;
+  onOpenPlaylists(): void;
+  onContinue(): void;
+}) {
   const [tracks, setTracks] = useState<Track[]>([]);
   const [hasMore, setHasMore] = useState(false);
   const [loaded, setLoaded] = useState(false);
@@ -128,6 +135,28 @@ export function FavoritesPage({ ctx, active }: { ctx: LibraryContext; active: bo
   }
 
   return <section ref={container} className="library favorites-library" aria-label="收藏歌曲" hidden={!active}>
+    <div className="library-overview">
+      <button className="overview-card collection-card" onClick={() => void playAll()} disabled={!tracks.length || loading || filling}
+        aria-label="播放收藏歌曲">
+        <span className="overview-kind"><Heart size={15} />我的收藏</span>
+        <span className="overview-art"><Cover src={tracks[0]?.coverUrl} icon={<Heart size={52} />} /></span>
+        <span className="overview-copy"><strong>{total === null ? '收藏的声音' : `${total.toLocaleString('zh-CN')} 首心动`}</strong>
+          <small>{filling ? `正在准备 ${tracks.length} 首…` : '把喜欢的声音，留在身边'}</small></span>
+        <span className="overview-play"><Play size={16} fill="currentColor" /></span>
+      </button>
+      <button className="overview-card continue-card" disabled={!currentTrack} onClick={onContinue}>
+        <span className="overview-kind"><Disc3 size={15} />接着听</span>
+        <span className="overview-art"><Cover src={currentTrack?.coverUrl} icon={<Disc3 size={58} />} /></span>
+        <span className="overview-copy"><strong>{currentTrack?.title ?? '此刻，听点什么'}</strong>
+          <small>{currentTrack?.artists.map(artist => artist.name).join(' / ') || '选择一首歌，开始聆听'}</small></span>
+        <span className="overview-play"><Play size={16} fill="currentColor" /></span>
+      </button>
+      <button className="overview-card playlists-card" onClick={onOpenPlaylists} aria-label="浏览歌单">
+        <span className="overview-kind"><ListMusic size={15} />我的歌单</span>
+        <span className="overview-orbit"><ListMusic size={46} /></span>
+        <span className="overview-copy"><strong>每种心情，都有回声</strong><small>自建与收藏的歌单</small></span>
+      </button>
+    </div>
     <div className="library-head">
       <div className="collection-count" aria-live="polite">
         <strong>{total === null ? '我的收藏' : `共 ${total.toLocaleString('zh-CN')} 首收藏`}</strong>

@@ -1,14 +1,16 @@
-import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, session, Tray } from 'electron';
+import { app, BrowserWindow, dialog, globalShortcut, Menu, nativeImage, nativeTheme, session, Tray } from 'electron';
 import { join } from 'node:path';
 import { pathToFileURL } from 'node:url';
 import { registerIpc } from './ipc';
 import { registerDesktopLyrics } from './desktop-lyrics';
+import { registerNativeControlGlass } from './native-control-glass';
 import { AuthManager } from './auth-manager';
 import { createAuthManagerLifecycle } from './auth-manager-lifecycle.mjs';
 import { applyNodeProxy, electronBypassRules, proxyConfigurationProblem, proxyRules, readProxySettings } from './proxy.mjs';
 import { shouldBlockMediaRequest } from '../safe-media-url.mjs';
 import { loadSettings } from './storage';
-import { TRAY_ICON_PNG_BASE64, TRAY_ICON_TEMPLATE_PNG_BASE64, TRAY_ICON_TEMPLATE_2X_PNG_BASE64 } from './icons';
+import { TRAY_ICON_PNG_BASE64 } from './icons';
+import appIconPath from '../../build/icon.png?asset';
 import { APP_DISPLAY_NAME } from '../shared/app-name.mjs';
 import type { AppSettings } from '../shared/types';
 
@@ -30,9 +32,23 @@ const hasSingleInstance = app.requestSingleInstanceLock();
 if (!hasSingleInstance) app.quit();
 
 async function createWindow(): Promise<void> {
+  const macOS = process.platform === 'darwin';
+  if (macOS) nativeTheme.themeSource = 'dark';
+  let liquidGlass: { addView(handle: Buffer, options: { cornerRadius: number; tintColor: string; opaque: boolean }): number } | undefined;
+  // The package loads its native binary at import time, so guard before importing it.
+  if (macOS && Number(process.getSystemVersion().split('.')[0]) >= 26) {
+    // A variable import also lets other platforms typecheck without this optional package.
+    const moduleName = 'electron-liquid-glass';
+    try { liquidGlass = (await import(/* @vite-ignore */ moduleName)).default; }
+    catch { console.warn('原生液态玻璃模块不可用，继续使用深色窗口。'); }
+  }
   const window = new BrowserWindow({
     width: 1180, height: 760, minWidth: 960, minHeight: 640,
     title: APP_DISPLAY_NAME,
+    backgroundColor: liquidGlass ? '#00000000' : '#121216',
+    ...(liquidGlass ? { transparent: true } : {}),
+    // Let the dark page fill the title bar while keeping macOS window controls.
+    ...(macOS ? { titleBarStyle: 'hiddenInset' as const, trafficLightPosition: { x: 18, y: 27 }, show: false } : {}),
     // No in-window menu bar on Windows/Linux; the menu is removed below.
     autoHideMenuBar: true,
     webPreferences: {
@@ -41,6 +57,9 @@ async function createWindow(): Promise<void> {
     },
   });
   mainWindow = window;
+  const firstPaint = macOS
+    ? new Promise<void>(resolve => window.once('ready-to-show', resolve))
+    : Promise.resolve();
   window.once('closed', () => { if (mainWindow === window) mainWindow = null; });
   // Default is a real quit; hiding to the tray only happens when the user opts in.
   window.on('close', event => {
@@ -52,6 +71,7 @@ async function createWindow(): Promise<void> {
     const auth = await authManagerLifecycle.get();
     if (window.isDestroyed()) return;
     registerIpc(window, auth, { onCloseBehavior: value => { closeBehavior = value; } });
+    registerNativeControlGlass(window);
     await registerDesktopLyrics(window);
     if (window.isDestroyed()) return;
     window.webContents.setWindowOpenHandler(() => ({ action: 'deny' }));
@@ -63,6 +83,26 @@ async function createWindow(): Promise<void> {
     window.webContents.on('will-navigate', blockUntrustedNavigation);
     window.webContents.on('will-redirect', blockUntrustedNavigation);
     await window.loadFile(join(__dirname, '../renderer/index.html'));
+    if (liquidGlass && !window.isDestroyed()) {
+      try {
+        const glassId = liquidGlass.addView(window.getNativeWindowHandle(), {
+          cornerRadius: 16, tintColor: '#12121640', opaque: false,
+        });
+        if (glassId < 0) throw new Error('Native glass view was not created');
+        const revealGlass = () => window.webContents.executeJavaScript(
+          "document.documentElement.classList.add('native-liquid-glass')");
+        await revealGlass();
+        // A renderer reload must reveal the existing native view without inserting another.
+        window.webContents.on('did-finish-load', () => { void revealGlass().catch(() => undefined); });
+      } catch {
+        window.setBackgroundColor('#121216');
+        console.warn('原生液态玻璃初始化失败，继续使用深色窗口。');
+      }
+    }
+    if (macOS) {
+      await firstPaint;
+      if (!window.isDestroyed()) window.show();
+    }
   } catch (error) {
     if (!window.isDestroyed()) window.destroy();
     throw error;
@@ -86,14 +126,10 @@ function showMainWindow(): void {
 
 function createTray(): void {
   try {
-    const image = process.platform === 'darwin'
-      ? nativeImage.createEmpty()
-      : nativeImage.createFromDataURL(`data:image/png;base64,${TRAY_ICON_PNG_BASE64}`);
-    if (process.platform === 'darwin') {
-      image.addRepresentation({ scaleFactor: 1, buffer: Buffer.from(TRAY_ICON_TEMPLATE_PNG_BASE64, 'base64') });
-      image.addRepresentation({ scaleFactor: 2, buffer: Buffer.from(TRAY_ICON_TEMPLATE_2X_PNG_BASE64, 'base64') });
-      image.setTemplateImage(true);
-    }
+    // Keep the same himo artwork; 32 pixels at 2x occupy 16 menu-bar points on macOS.
+    const image = nativeImage.createFromBuffer(Buffer.from(TRAY_ICON_PNG_BASE64, 'base64'), {
+      scaleFactor: process.platform === 'darwin' ? 2 : 1,
+    });
     tray = new Tray(image.isEmpty() ? nativeImage.createEmpty() : image);
     tray.setToolTip(APP_DISPLAY_NAME);
     tray.setContextMenu(Menu.buildFromTemplate([
@@ -165,6 +201,8 @@ app.whenReady().then(() => {
   const proxy = readProxySettings();
   applyNodeProxy(proxy);
   const settingsReady = loadSettings().then(settings => { closeBehavior = settings.closeBehavior; });
+  // The development Electron bundle keeps its own icon unless the running app sets it.
+  if (process.platform === 'darwin' && !app.isPackaged) app.dock?.setIcon(appIconPath);
   configureApplicationMenu();
   createTray();
   registerMediaKeys();

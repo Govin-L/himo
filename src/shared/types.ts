@@ -170,6 +170,9 @@ export type SavedQueue = {
   positionSeconds: number;
 };
 
+export type ControlGlassRect = { x: number; y: number; width: number; height: number };
+export type ControlGlassLayout = { player: ControlGlassRect | null; tabs: ControlGlassRect | null; search: ControlGlassRect | null };
+
 export type DesktopApi = {
   auth: {
     status(): Promise<Result<AuthStatus>>;
@@ -210,7 +213,11 @@ export type DesktopApi = {
     load(): Promise<Result<SavedQueue | null>>;
     save(input: SavedQueue): Promise<Result<void>>;
   };
-  window: { minimize(): Promise<void>; setCloseBehavior(input: 'quit' | 'tray'): Promise<Result<AppSettings>> };
+  window: {
+    minimize(): Promise<void>;
+    setCloseBehavior(input: 'quit' | 'tray'): Promise<Result<AppSettings>>;
+    syncGlassControls(layout: ControlGlassLayout): Promise<Result<{ active: boolean }>>;
+  };
   fonts: { list(): Promise<Result<{ families: string[] }>> };
   lyrics: {
     /** Opens a picker; resolves null when the user cancels. */

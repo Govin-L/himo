@@ -57,9 +57,10 @@ try {
   await page.getByRole('button', { name: '重试加载收藏' }).click();
   await page.getByText('已加载 150 首', { exact: true }).waitFor();
   const beforeNavigation = await page.locator('.main-content').evaluate(element => { element.scrollTop = 2800; return element.scrollTop; });
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByText(/当前版本/).waitFor();
-  await page.getByRole('button', { name: '我的收藏', exact: true }).click();
+  await page.getByRole('button', { name: '首页', exact: true }).click();
   await page.getByText('已加载 150 首', { exact: true }).waitFor();
   const restored = await page.locator('.main-content').evaluate(element => element.scrollTop);
   assert.ok(Math.abs(restored - beforeNavigation) < 3, `scroll position was not restored (${beforeNavigation} -> ${restored})`);

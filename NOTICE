@@ -20,14 +20,37 @@ SPDX-License-Identifier: AGPL-3.0-only
 https://github.com/talongao/huawei-music-desktop
 分叉基线：3fd67319fa4b4a10de00d6da7d88e4e52ebd8327。
 修改包括 himo 名称与图标、macOS 菜单栏适配、透明桌面歌词与样式设置、离线预览和本地开发基建。
+2026-10-23 增加 macOS 一体化深色标题栏和原生 Liquid Glass 主窗口效果。
+底部播放条和 Tab 的局部原生视图由本项目使用公开 AppKit / Node-API 实现，沿用本项目许可。
 原有版权与 AGPL-3.0 许可继续保留；完整修改记录见 Git 历史。
 
 第三方归属与例外
 ----------------
-- himo 使用项目定制应用图标与单色托盘标记；保留原 Lucide 图标及界面图标归属说明，见
+- himo 使用项目定制应用图标与托盘标记；保留原 Lucide 图标及界面图标归属说明，见
   build/icon.LICENSE.txt。
 - 运行时依赖（Electron、React、undici 等）按其各自许可证分发，见各依赖包内声明。
+- macOS 原生玻璃使用 electron-liquid-glass 1.1.1（Meridius Labs，MIT）：
+  https://github.com/Meridius-Labs/electron-liquid-glass
 - 除注明的上游代码外，未另引入其他音乐客户端源码；接口形态来自公开兼容性研究，
   相关记录见 docs/API_CONTRACT.md 与 docs/authorized-feature-validation.md。
 - 代码许可不代表获得华为服务、接口、商标或音乐内容的任何许可；详见 README 的
   免责声明与使用边界。
+
+electron-liquid-glass — MIT License
+----------------------------------
+Copyright 2025 Meridius Labs
+
+Permission is hereby granted, free of charge, to any person obtaining a copy of this software and
+associated documentation files (the “Software”), to deal in the Software without restriction,
+including without limitation the rights to use, copy, modify, merge, publish, distribute,
+sublicense, and/or sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:
+
+The above copyright notice and this permission notice shall be included in all copies or
+substantial portions of the Software.
+
+THE SOFTWARE IS PROVIDED “AS IS”, WITHOUT WARRANTY OF ANY KIND, EXPRESS OR IMPLIED, INCLUDING BUT
+NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND
+NONINFRINGEMENT. IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM,
+DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

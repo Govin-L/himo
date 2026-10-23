@@ -47,6 +47,7 @@ try {
   const status = await page.evaluate(() => window.desktop.auth.status());
   assert.equal(status.data.authenticated, false);
   assert.equal(await page.getByRole('button', { name: '播放', exact: true }).isDisabled(), true);
+  await page.getByRole('button', { name: '我的', exact: true }).click();
   await page.getByRole('button', { name: '设置', exact: true }).click();
   await page.getByText(/当前版本/).waitFor();
   await page.getByRole('combobox', { name: '默认音质' }).selectOption('lossless');

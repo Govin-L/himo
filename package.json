@@ -66,6 +66,10 @@
     "appId": "org.hwmusicdesktop.unofficial.internal",
     "productName": "himo",
     "asar": true,
+    "asarUnpack": [
+      "out/main/native-control-glass.node",
+      "node_modules/electron-liquid-glass/prebuilds/**/*"
+    ],
     "npmRebuild": false,
     "publish": null,
     "artifactName": "${name}-${version}-${os}-${arch}-internal.${ext}",
@@ -75,6 +79,7 @@
     "files": [
       "out/**/*",
       "package.json",
+      "NOTICE",
       "!**/.local/**",
       "!**/research/**",
       "!**/docs/**",
@@ -135,5 +140,8 @@
   },
   "dependencies": {
     "undici": "7.30.0"
+  },
+  "optionalDependencies": {
+    "electron-liquid-glass": "1.1.1"
   }
 }

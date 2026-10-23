@@ -128,7 +128,7 @@ try {
   await page.getByRole('button', { name: '歌词配色 天青', exact: true }).click();
   await overlay.waitForFunction(() => getComputedStyle(document.querySelector('.desktop-lyrics-window'))
     .getPropertyValue('--lyric-played').trim() === '#6fd3ff');
-  await page.getByRole('button', { name: '我的收藏', exact: true }).click();
+  await page.getByRole('button', { name: '首页', exact: true }).click();
   await overlay.locator('.desktop-lyrics-window').hover();
   await mkdir('release/qa', { recursive: true });
   await overlay.screenshot({ path: 'release/qa/macos-desktop-lyrics-toolbar-synthetic.png', omitBackground: true });
